@@ -245,6 +245,8 @@ python3 tests/test_core_offline.py     # no network; runs real MAFFT and Primer3
 python3 tests/test_entrez_query.py     # Entrez query builder, no network
 python3 tests/test_db.py               # run database, in a temporary data dir
 node    tests/test_viz_headless.js     # renders the newest job result in a stubbed DOM
+node    tests/test_frontend_flow.js    # whole UI flow against a running server
+node    tests/test_frontend_flow.js --blast   # same, via the NCBI BLAST route
 ```
 
 `install.sh` runs the offline ones for you at the end of the install.
@@ -264,6 +266,14 @@ everything.
 its oligo sequences, does not duplicate rows when the same run is indexed twice,
 keeps failed runs with their reason, and that deleting a run touches the index
 only.
+
+`test_frontend_flow.js` is the end-to-end one: it loads the real `app.js` and
+`viz.js` into a DOM stub built from `index.html` and drives the same functions
+the buttons call — search, hit table, design, result view, downloads, history,
+reopening a past run. It needs the server running (`./run.sh`) and reaches NCBI.
+It catches wiring bugs no backend test can see: a request field the frontend
+never sends, a result key the renderers read under a different name, a step that
+never becomes visible.
 
 `test_viz_headless.js` runs the visualisation code against the most recent
 `results.json` with a stubbed DOM. It asserts that the field names the renderers
