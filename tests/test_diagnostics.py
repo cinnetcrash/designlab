@@ -50,6 +50,12 @@ def test_short_block_blames_composition_not_length() -> None:
         "the block held 60 candidates; calling it too short is wrong: " + msg
     assert "not too short" in msg, "the correction should be explicit: " + msg
     assert "92" in msg, "in-block candidate count (60 + 32) not reported: " + msg
+    # Both filters must be reported: widening GC alone would not have rescued
+    # this run, because the best in-block Tm was 55.9 C against a 57 C floor.
+    assert "Tm window" in msg and "GC window" in msg, \
+        "both per-oligo filters should be shown, not only the dominant one: " + msg
+    assert "may not be enough" in msg, \
+        "the message should warn that widening one filter can be futile: " + msg
 
 
 def test_nothing_fits_is_still_reported_as_such() -> None:
@@ -70,7 +76,12 @@ def test_tm_is_named_when_tm_dominates() -> None:
                  "GC content failed 10, ok 0",
         "pair": "considered 0, ok 0",
     }, req())
-    assert "Tm window" in msg and "GC window" not in msg, msg
+    # Tm leads, so the advice must be about Tm even though both counts are shown.
+    assert "280 on the Tm window" in msg, msg
+    assert "20 on the GC window" in msg, "the other counter is still reported: " + msg
+    assert msg.index("Widening the Tm window") < msg.index("alone may not be enough"), \
+        "the warning must name the leading filter: " + msg
+    assert "widen the Tm window" in msg, msg
 
 
 def test_probe_is_named_when_the_pair_stage_ran() -> None:

@@ -459,14 +459,21 @@ def _diagnose_primer3(explain: dict[str, str], req: DesignRequest) -> str:
               "can still reach the required Tm")),
             key=lambda x: x[0])
 
+        # Report both counters, not just the dominant one: on a short block the
+        # second filter usually bites as soon as the first is widened, and a
+        # message naming only the leader sends the user round the loop twice.
         return (
             f"{inside:,} candidate primers did fit inside a conserved block, so "
-            "the blocks are not too short — but every one of them was rejected, "
-            f"{worst:,} of them on {label}. The conserved sequence itself is the "
-            f"problem, not its length. ({excluded:,} further candidates fell "
-            "outside the blocks.) Next steps: " + advice + "; or lower the "
-            "conservation identity threshold so longer, more representative "
-            "blocks become available."
+            "the blocks are not too short — but every one of them was rejected: "
+            f"{gc_fail:,} on the GC window ({req.primer3.primer_min_gc}-"
+            f"{req.primer3.primer_max_gc}%) and {tm_fail:,} on the Tm window "
+            f"({req.primer3.primer_min_tm}-{req.primer3.primer_max_tm} °C). The "
+            "conserved sequence itself is the problem, not its length "
+            f"({excluded:,} further candidates fell outside the blocks). Widening "
+            f"{label} alone may not be enough — on a short block the other filter "
+            "usually rejects whatever survives. Next steps: " + advice + "; or "
+            "lower the conservation identity threshold so longer, more "
+            "representative blocks become available."
         )
 
     size_fail = got("unacceptable product size")
