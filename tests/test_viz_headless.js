@@ -65,9 +65,13 @@ const sandbox = {
   }),
 };
 sandbox.globalThis = sandbox;
+sandbox.localStorage = { getItem: () => null, setItem: () => {} };
 vm.createContext(sandbox);
-// `const VIZ = …` is a lexical binding, so it never lands on the sandbox's
-// global object; evaluating the name afterwards is what hands it back.
+// viz.js calls t(), so i18n.js has to be in the context first, exactly as the
+// page loads it. Both define their export with `const`, which is a lexical
+// binding and never lands on the sandbox global — hence the explicit assignment.
+vm.runInContext(fs.readFileSync(path.join(root, 'frontend', 'js', 'i18n.js'), 'utf8')
+  + '\n;globalThis.I18N = I18N; globalThis.t = t;', sandbox, { filename: 'i18n.js' });
 const vizSource = fs.readFileSync(path.join(root, 'frontend', 'js', 'viz.js'), 'utf8');
 const VIZ = vm.runInContext(vizSource + '\n;VIZ;', sandbox, { filename: 'viz.js' });
 

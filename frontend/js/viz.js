@@ -215,7 +215,7 @@ const VIZ = (() => {
     parts.push(`<line x1="${ax0}" y1="92" x2="${ax0}" y2="100" stroke="${p.accent}"></line>`);
     parts.push(`<line x1="${ax1}" y1="92" x2="${ax1}" y2="100" stroke="${p.accent}"></line>`);
     parts.push(`<text class="svg-label" x="${(ax0 + ax1) / 2}" y="112" text-anchor="middle"
-      fill="${p.accent}">amplikon ${pair.product_size} bp</text>`);
+      fill="${p.accent}">${t('v.ampliconBp', { n: pair.product_size })}</text>`);
 
     // primers, drawn on the strand they anneal to
     parts.push(arrowSvg(x(fw.start), x(fw.end + 1), 44, p.forward, '+',
@@ -235,16 +235,16 @@ const VIZ = (() => {
       parts.push(`<line x1="${x(pos)}" y1="122" x2="${x(pos)}" y2="126" stroke="${p.dim}"></line>`);
       parts.push(`<text class="svg-dim" x="${x(pos)}" y="136" text-anchor="middle">${pos.toLocaleString()}</text>`);
     }
-    parts.push(`<text class="svg-dim" x="${m}" y="20">referans: ${result.reference.label}
-      (${refLen.toLocaleString()} bp)</text>`);
+    parts.push(`<text class="svg-dim" x="${m}" y="20">${t('v.reference')}: `
+      + `${result.reference.label} (${refLen.toLocaleString()} bp)</text>`);
 
     const svg = `<svg viewBox="0 0 ${W} ${H + 14}" preserveAspectRatio="xMidYMid meet">${parts.join('')}</svg>`;
 
     // close-ups: what actually pairs with what
     const closeups = [
-      closeupDuplex(result, pair.forward, 'Forward primer', p.forward),
-      pair.probe ? closeupDuplex(result, pair.probe, 'Probe', p.probe) : '',
-      closeupDuplex(result, pair.reverse, 'Reverse primer', p.reverse),
+      closeupDuplex(result, pair.forward, t('v.forwardPrimer'), p.forward),
+      pair.probe ? closeupDuplex(result, pair.probe, t('v.probe'), p.probe) : '',
+      closeupDuplex(result, pair.reverse, t('v.reversePrimer'), p.reverse),
     ].join('');
 
     container.innerHTML = svg + `<div class="struct-grid" style="margin-top:14px">${closeups}</div>`;
@@ -273,33 +273,32 @@ const VIZ = (() => {
     const lead = oligo.start - s, tail = e - (oligo.end + 1);
     const site = oligo.template_slice;
 
-    const note = oligo.strand === '+'
-      ? 'primer üst zincirle aynı diziye sahiptir; alt zincire bağlanır, 3\' ucu sağa uzar'
-      : 'primer alt zincirle aynı diziye sahiptir; üst zincire bağlanır, 3\' ucu sola uzar';
+    const note = t(oligo.strand === '+' ? 'v.notePlus' : 'v.noteMinus');
 
     const mark = (str, cls) => `<span class="${cls}">${esc(str)}</span>`;
     const seg = (str) => mark(str.slice(0, lead), 'dim') +
       esc(str.slice(lead, lead + site.length)) + mark(str.slice(lead + site.length), 'dim');
 
     const strandRows = [
-      `5'-${seg(top)}-3'  şablon (+)`,
+      `5'-${seg(top)}-3'  ${t('v.templatePlus')}`,
       `   ${' '.repeat(lead)}${'|'.repeat(site.length)}`,
-      `3'-${seg(bottom)}-5'  şablon (−)`,
+      `3'-${seg(bottom)}-5'  ${t('v.templateMinus')}`,
     ];
 
     const primerRow = oligo.strand === '+'
-      ? `   ${' '.repeat(lead)}<b style="color:${colour}">${esc(site)}</b>  primer 5'→3'`
-      : `   ${' '.repeat(lead)}<b style="color:${colour}">${esc(complement(site))}</b>  primer 3'←5'`;
+      ? `   ${' '.repeat(lead)}<b style="color:${colour}">${esc(site)}</b>  ${t('v.primerFwd')}`
+      : `   ${' '.repeat(lead)}<b style="color:${colour}">${esc(complement(site))}</b>  ${t('v.primerRev')}`;
 
     const ordered = oligo.strand === '+'
       ? [primerRow, ...strandRows]
       : [...strandRows, primerRow];
 
     return `<div class="struct">
-      <h4 style="color:${colour}">${title} — referans ${oligo.start + 1}–${oligo.end + 1}</h4>
+      <h4 style="color:${colour}">${title} — ${t('v.refRange',
+        { from: oligo.start + 1, to: oligo.end + 1 })}</h4>
       <pre>${ordered.join('\n')}</pre>
       <div class="val">${esc(note)}<br>
-        sipariş dizisi (5'→3'): <b>${esc(oligo.sequence)}</b></div>
+        ${t('v.orderSeq')}: <b>${esc(oligo.sequence)}</b></div>
     </div>`;
   }
 
@@ -310,8 +309,16 @@ const VIZ = (() => {
      3. Per-sequence binding detail
      ───────────────────────────────────────────────────────────────────── */
 
+  /** Left-hand labels of the duplex view share one fixed-width column, so the
+      primer and template rows stay aligned whatever the language. */
+  const LABEL_WIDTH = 8;
+  const pad = (label) => (label + ' '.repeat(LABEL_WIDTH)).slice(0, LABEL_WIDTH);
+
   function renderBinding(container, binding, onlyMismatch) {
-    if (!binding) { container.innerHTML = '<p class="hint">Bu oligo yok.</p>'; return; }
+    if (!binding) {
+      container.innerHTML = `<p class="hint">${t('v.noOligo')}</p>`;
+      return;
+    }
     const site = binding.plus_strand_site;
     const rows = binding.per_sequence
       .filter(s => !onlyMismatch || !s.perfect)
@@ -330,20 +337,22 @@ const VIZ = (() => {
         }
         const bars = cols.map(col => mmCols.has(col) ? ' ' : '|').join('');
         const tag = s.perfect
-          ? '<span class="tag-ok">tam eşleşme</span>'
+          ? `<span class="tag-ok">${t('v.perfect')}</span>`
           : (s.n_three_prime_mismatch
-            ? `<span class="tag-bad">${s.n_mismatch} uyumsuz · 3' uçta ${s.n_three_prime_mismatch}</span>`
-            : `<span class="tag-warn">${s.n_mismatch} uyumsuz</span>`);
-        const ins = s.insertions ? ` <span class="tag-warn">+${s.insertions} insersiyon</span>` : '';
+            ? `<span class="tag-bad">${t('v.mismatchesTp',
+                { n: s.n_mismatch, tp: s.n_three_prime_mismatch })}</span>`
+            : `<span class="tag-warn">${t('v.mismatches', { n: s.n_mismatch })}</span>`);
+        const ins = s.insertions
+          ? ` <span class="tag-warn">${t('v.insertions', { n: s.insertions })}</span>` : '';
         return `<div class="bind-row">
           <div class="bind-head"><span class="lbl">${esc(s.label)}</span><span>${tag}${ins}</span></div>
-          <div class="duplex"><span class="dim">primer  </span>${esc(site)}
-<span class="dim">        </span>${bars}
-<span class="dim">şablon  </span>${obs}</div>
+          <div class="duplex"><span class="dim">${pad(t('v.primerLabel'))}</span>${esc(site)}
+<span class="dim">${' '.repeat(8)}</span>${bars}
+<span class="dim">${pad(t('v.templateLabel'))}</span>${obs}</div>
         </div>`;
       });
     container.innerHTML = rows.length ? rows.join('')
-      : '<p class="hint">Tüm diziler tam eşleşiyor.</p>';
+      : `<p class="hint">${t('v.allPerfect')}</p>`;
   }
 
   /* ─────────────────────────────────────────────────────────────────────
@@ -366,14 +375,14 @@ const VIZ = (() => {
         const s = pair.binding[role].per_sequence[i];
         const crit = s.n_three_prime_mismatch > 0 ? ' crit' : '';
         return `<span class="heat-cell${crit}" style="background:${heatColour(s.n_mismatch)}"
-          title="${esc(label)} · ${role} · ${s.n_mismatch} uyumsuz, 3' uçta ${s.n_three_prime_mismatch}">${s.n_mismatch}</span>`;
+          title="${esc(label)} · ${role} · ${t('v.mismatchesTp',
+            { n: s.n_mismatch, tp: s.n_three_prime_mismatch })}">${s.n_mismatch}</span>`;
       }).join('');
       return `<div class="heat-row"><span class="heat-label" title="${esc(label)}">${esc(label)}</span>${cells}</div>`;
     });
 
     container.innerHTML = `<div class="heat">${head}${rows.join('')}</div>
-      <p class="hint" style="margin-top:8px">Sayı = uyumsuz baz. Kırmızı çerçeve =
-      3' uçtaki son 5 bazda uyumsuzluk (uzama ciddi şekilde bozulur).</p>`;
+      <p class="hint" style="margin-top:8px">${t('v.heatLegend')}</p>`;
   }
 
   /* ─────────────────────────────────────────────────────────────────────
@@ -386,58 +395,60 @@ const VIZ = (() => {
 
     const duplexCard = (title, d, thermo) => {
       if (!d) return `<div class="struct"><h4>${title}</h4>
-        <pre>eşleşme bulunamadı (&lt;3 baz çifti)</pre>${thermo || ''}</div>`;
+        <pre>${t('v.noPairing')}</pre>${thermo || ''}</div>`;
       return `<div class="struct"><h4>${title}</h4>
         <pre>5'-${esc(d.top)}-3'
    ${esc(d.match)}
 3'-${esc(d.bottom)}-5'</pre>
-        <div class="val">${d.pairs} baz çifti · en uzun kesintisiz dizi ${d.longest_run}
-          · 3' uçta ${d.three_prime_pairs}${thermo || ''}</div></div>`;
+        <div class="val">${t('v.duplexStats', {
+          pairs: d.pairs, run: d.longest_run, tp: d.three_prime_pairs,
+        })}${thermo || ''}</div></div>`;
     };
 
     const th = (label, v) => v === null || v === undefined ? ''
       : `<br>Primer3 ${label}: <b>${v} °C</b>`;
 
-    cards.push(duplexCard('Forward self-dimer', g.forward_self_dimer,
+    cards.push(duplexCard(t('v.selfDimerF'), g.forward_self_dimer,
       th('SELF_ANY_TH', pair.forward.self_any_th) + th('SELF_END_TH', pair.forward.self_end_th)));
-    cards.push(duplexCard('Reverse self-dimer', g.reverse_self_dimer,
+    cards.push(duplexCard(t('v.selfDimerR'), g.reverse_self_dimer,
       th('SELF_ANY_TH', pair.reverse.self_any_th) + th('SELF_END_TH', pair.reverse.self_end_th)));
-    cards.push(duplexCard('F × R cross-dimer', g.cross_dimer,
+    cards.push(duplexCard(t('v.crossDimer'), g.cross_dimer,
       th('PAIR_COMPL_ANY_TH', pair.compl_any_th) + th('PAIR_COMPL_END_TH', pair.compl_end_th)));
 
-    cards.push(hairpinCard('Forward hairpin', g.forward_hairpin, pair.forward.hairpin_th));
-    cards.push(hairpinCard('Reverse hairpin', g.reverse_hairpin, pair.reverse.hairpin_th));
+    cards.push(hairpinCard(t('v.hairpinF'), g.forward_hairpin, pair.forward.hairpin_th));
+    cards.push(hairpinCard(t('v.hairpinR'), g.reverse_hairpin, pair.reverse.hairpin_th));
 
     if (pair.probe) {
-      cards.push(duplexCard('Probe self-dimer', g.probe_self_dimer,
+      cards.push(duplexCard(t('v.probeSelfDimer'), g.probe_self_dimer,
         th('SELF_ANY_TH', pair.probe.self_any_th)));
-      cards.push(duplexCard('Probe × F dimer', g.probe_forward_dimer, ''));
-      cards.push(duplexCard('Probe × R dimer', g.probe_reverse_dimer, ''));
-      cards.push(hairpinCard('Probe hairpin', g.probe_hairpin, pair.probe.hairpin_th));
+      cards.push(duplexCard(t('v.probeFDimer'), g.probe_forward_dimer, ''));
+      cards.push(duplexCard(t('v.probeRDimer'), g.probe_reverse_dimer, ''));
+      cards.push(hairpinCard(t('v.probeHairpin'), g.probe_hairpin, pair.probe.hairpin_th));
       if (g.probe_five_prime_g) {
-        cards.push(`<div class="struct"><h4 class="tag-bad">Prob 5' ucu G</h4>
+        cards.push(`<div class="struct"><h4 class="tag-bad">${t('v.probe5g')}</h4>
           <pre>${esc(pair.probe.sequence.slice(0, 12))}…</pre>
-          <div class="val tag-bad">Hidroliz problarında 5'-G raportör boyayı söndürür;
-          probu 1–2 baz kaydırmak ya da ters zinciri kullanmak gerekir.</div></div>`);
+          <div class="val tag-bad">${t('v.probe5gNote')}</div></div>`);
       }
     }
     container.innerHTML = cards.join('');
   }
 
   function hairpinCard(title, hp, thermoTm) {
-    const t = thermoTm === null || thermoTm === undefined ? ''
+    const thermo = thermoTm === null || thermoTm === undefined ? ''
       : `<br>Primer3 HAIRPIN_TH: <b>${thermoTm} °C</b>`;
     if (!hp) return `<div class="struct"><h4>${title}</h4>
-      <pre>3 bazdan uzun sap bulunamadı</pre><div class="val">${t}</div></div>`;
+      <pre>${t('v.noStem')}</pre><div class="val">${thermo}</div></div>`;
     const loop = hp.loop_seq;
     const arm = hp.stem5_seq, arm3 = hp.stem3_seq;
     const pairsLine = '|'.repeat(hp.stem_length);
     return `<div class="struct"><h4>${title}</h4>
       <pre>5'-…${esc(arm)}
       ${esc(pairsLine)}   ╮
-3'-…${esc([...arm3].reverse().join(''))}   ├ döngü ${hp.loop_length} nt: ${esc(loop)}
+3'-…${esc([...arm3].reverse().join(''))}   ├ ${t('v.loopLabel',
+        { n: hp.loop_length, seq: esc(loop) })}
                  ╯</pre>
-      <div class="val">sap ${hp.stem_length} bp · döngü ${hp.loop_length} nt${t}</div></div>`;
+      <div class="val">${t('v.stemLoop',
+        { stem: hp.stem_length, loop: hp.loop_length })}${thermo}</div></div>`;
   }
 
   /* ─────────────────────────────────────────────────────────────────────

@@ -10,7 +10,8 @@
  * renderers read under a different name, a step that never becomes visible.
  *
  *   ./run.sh &                        # server must be up
- *   node tests/test_frontend_flow.js  # add --blast to exercise the NCBI BLAST route
+ *   node tests/test_frontend_flow.js  # add --blast for the NCBI BLAST route,
+ *                                     # --lang=en to drive the English interface
  */
 const fs = require('fs');
 const path = require('path');
@@ -19,6 +20,7 @@ const vm = require('vm');
 const root = path.resolve(__dirname, '..');
 const BASE = process.env.PD_URL || 'http://127.0.0.1:8090';
 const USE_BLAST = process.argv.includes('--blast');
+const LANG = (process.argv.find(a => a.startsWith('--lang=')) || '--lang=tr').slice(7);
 
 /* ─── build a DOM stub from the real index.html ───────────────────────── */
 
@@ -178,12 +180,15 @@ const sandbox = {
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 
+vm.runInContext(fs.readFileSync(path.join(root, 'frontend/js/i18n.js'), 'utf8')
+  + '\n;globalThis.I18N = I18N; globalThis.t = t;', sandbox, { filename: 'i18n.js' });
+sandbox.I18N.setLang(LANG);
 vm.runInContext(fs.readFileSync(path.join(root, 'frontend/js/viz.js'), 'utf8')
   + '\n;globalThis.VIZ = VIZ;', sandbox, { filename: 'viz.js' });
 vm.runInContext(fs.readFileSync(path.join(root, 'frontend/js/app.js'), 'utf8')
   + '\n;globalThis.__app = {startSearch, startDesign, renderHits, renderResult,'
   + ' updateQueryPreview, pollActive, state, showStep, loadHistory, openPastRun,'
-  + ' EXAMPLE};',
+  + ' switchLanguage, EXAMPLE};',
   sandbox, { filename: 'app.js' });
 
 const app = sandbox.__app;
@@ -209,7 +214,18 @@ async function step(name, fn) {
 }
 
 (async () => {
-  console.log(`frontend flow against ${BASE} (${USE_BLAST ? 'BLAST' : 'Entrez'} route)\n`);
+  console.log(`frontend flow against ${BASE} `
+    + `(${USE_BLAST ? 'BLAST' : 'Entrez'} route, ${LANG.toUpperCase()} interface)\n`);
+
+  await step('interface is in the requested language', async () => {
+    assert(sandbox.I18N.lang === LANG, `language is ${sandbox.I18N.lang}`);
+    const sample = sandbox.t('s2.designBtn');
+    assert(!sample.startsWith('!'), `untranslated key: ${sample}`);
+    if (LANG === 'en') {
+      assert(!/[çğıöşüÇĞİÖŞÜ]/.test(sample), `Turkish leaked into EN: ${sample}`);
+    }
+    return `"${sample}"`;
+  });
 
   await step('server reachable and tools present', async () => {
     const h = await (await fetchAbsolute('/api/health')).json();
@@ -275,7 +291,7 @@ async function step(name, fn) {
     const steps = $('pipelineSteps').innerHTML;
     assert(steps.includes('Primer3'), 'pipeline step list not rendered');
     assert(log.includes('MAFFT'), 'MAFFT never appeared in the run log');
-    assert($('nowTool').textContent === 'bitti',
+    assert($('nowTool').textContent === sandbox.t('run.finished'),
       `run indicator stuck on "${$('nowTool').textContent}"`);
     return 'indicator settled, stages rendered';
   });
@@ -291,10 +307,21 @@ async function step(name, fn) {
     assert($('metricsTable').innerHTML.includes('<tbody>'), 'metrics table empty');
     assert($('recordBox').innerHTML.includes('data-table'), 'record table empty');
     assert($('methodsBox').textContent.includes('MAFFT'), 'methods block empty');
-    const bad = ['undefined', 'NaN', '[object Object]'].filter(
-      t => $('metricsTable').innerHTML.includes(t) || $('pairList').innerHTML.includes(t));
+    const panels = ['stats', 'pairList', 'ampliconViz', 'bindingDetail',
+                    'coverageHeatmap', 'structureViz', 'metricsTable', 'recordBox'];
+    const markup = panels.map(id => $(id).innerHTML).join('');
+    const bad = ['undefined', 'NaN', '[object Object]'].filter(x => markup.includes(x));
     assert(!bad.length, 'leaked into the markup: ' + bad.join(', '));
-    return 'all panels filled, no undefined/NaN';
+    // t() returns "!key" for a missing translation, which must never be rendered.
+    const missing = [...markup.matchAll(/!([a-z][a-zA-Z0-9]*\.[a-zA-Z0-9._]+)/g)]
+      .map(m => m[1]);
+    assert(!missing.length, 'untranslated keys rendered: ' + missing.join(', '));
+    if (LANG === 'en') {
+      const turkish = markup.match(/[çğışöüÇĞİŞÖÜ][a-zçğıöşü]{2,}/g);
+      assert(!turkish, 'Turkish text in the EN interface: '
+        + [...new Set(turkish || [])].slice(0, 5).join(', '));
+    }
+    return 'all panels filled, no undefined/NaN, no untranslated keys';
   });
 
   await step('downloads point at the finished job', async () => {
@@ -326,6 +353,19 @@ async function step(name, fn) {
     assert(a.count === 0, `${a.count} job(s) still running: ${JSON.stringify(a.tools)}`);
     assert($('activeBadge')._classes.has('hidden'), 'badge left visible while idle');
     return 'badge hidden';
+  });
+
+  await step('switching language rebuilds what JavaScript wrote', async () => {
+    const before = $('pairList').innerHTML;
+    await app.switchLanguage();
+    const after = $('pairList').innerHTML;
+    assert(sandbox.I18N.lang !== LANG, 'language did not change');
+    assert(before !== after, 'the pair list was not re-rendered');
+    assert(!after.includes('!s4.'), 'untranslated key after the switch');
+    const other = sandbox.I18N.lang;
+    await app.switchLanguage();
+    assert(sandbox.I18N.lang === LANG, 'switching back failed');
+    return `${LANG} → ${other} → ${LANG}`;
   });
 
   console.log(failed ? `\n${failed} check(s) failed` : '\nfrontend flow ok');

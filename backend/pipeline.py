@@ -280,14 +280,23 @@ def _run_design(job_id: str, req: DesignRequest) -> dict[str, Any]:
         feasible = _feasible_product_range(blocks, req.primer3.primer_min_size)
         layout = "; ".join(f"{b['ref_start'] + 1}-{b['ref_end'] + 1} "
                            f"({b['length']} bp)" for b in blocks[:8])
+        if feasible is None:
+            window = (
+                "that layout allows no product at all: no conserved block is "
+                f"long enough to hold two {req.primer3.primer_min_size} nt "
+                "primers, and there is no pair of blocks a product could span"
+            )
+        else:
+            window = (f"that layout allows products of roughly {feasible[0]}-"
+                      f"{feasible[1]} bp, while "
+                      f"{req.primer3.product_min}-{req.primer3.product_max} bp "
+                      "was requested")
         raise RuntimeError(
             "Primer3 found no pair under these constraints. "
             f"{_diagnose_primer3(p3['explain'], req)} "
             f"Conserved blocks on the reference: {layout}"
-            f"{' …' if len(blocks) > 8 else ''}; that layout allows products of "
-            f"roughly {feasible[0]}-{feasible[1]} bp and "
-            f"{req.primer3.product_min}-{req.primer3.product_max} bp was "
-            "requested. Primer3's own counters: "
+            f"{' …' if len(blocks) > 8 else ''}; {window}. "
+            "Primer3's own counters: "
             f"left[{p3['explain']['left']}] right[{p3['explain']['right']}] "
             f"pair[{p3['explain']['pair']}]."
         )
@@ -392,17 +401,73 @@ def _diagnose_primer3(explain: dict[str, str], req: DesignRequest) -> str:
     combinations are the wrong length, while the reason no *valid-length* pair
     survived is something else entirely — most often the qPCR probe.
     """
-    # Primer3 writes the pair line as "considered 66610, unacceptable product
-    # size 61111, no internal oligo 5499, ok 0".
-    pair_line = explain.get("pair", "")
-    counts: dict[str, int] = {}
-    for chunk in pair_line.split(","):
-        match = re.match(r"\s*(.+?)\s+(\d+)\s*$", chunk)
-        if match:
-            counts[match.group(1).strip().lower()] = int(match.group(2))
+    # Primer3 writes each line as "considered 66610, unacceptable product size
+    # 61111, no internal oligo 5499, ok 0".
+    def parse(line: str) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for chunk in line.split(","):
+            match = re.match(r"\s*(.+?)\s+(\d+)\s*$", chunk)
+            if match:
+                out[match.group(1).strip().lower()] = int(match.group(2))
+        return out
 
-    def got(key: str) -> int:
-        return sum(v for k, v in counts.items() if key in k)
+    counts = parse(explain.get("pair", ""))
+    left = parse(explain.get("left", ""))
+    right = parse(explain.get("right", ""))
+
+    def got(key: str, table: dict[str, int] | None = None) -> int:
+        table = counts if table is None else table
+        return sum(v for k, v in table.items() if key in k)
+
+    # When no individual primer survived, the pair stage never ran ("considered
+    # 0") and its counters say nothing; the reason lives in the left/right
+    # lines. Two different failures hide there and must not be confused:
+    # candidates rejected for falling outside a conserved block ("overlap
+    # excluded region"), and candidates that did fit but failed Tm/GC. Counting
+    # only the first leads to "no primer could fit", which is wrong whenever the
+    # block is long enough to hold one — the block's base composition is then
+    # the real blocker.
+    if got("considered") == 0:
+        considered = got("considered", left) + got("considered", right)
+        excluded = got("overlap excluded region", left) + got("overlap excluded region", right)
+        gc_fail = got("gc content failed", left) + got("gc content failed", right)
+        tm_fail = (got("low tm", left) + got("high tm", left)
+                   + got("low tm", right) + got("high tm", right))
+        inside = considered - excluded
+
+        if considered == 0:
+            return ("Primer3 considered no candidate at all, which normally means "
+                    "the template or the excluded regions were malformed.")
+        if inside <= 0:
+            return (
+                f"No conserved block can hold a primer: all {considered:,} "
+                "candidates overlapped a variable region. Next steps: lower the "
+                "conservation identity threshold or deselect the most divergent "
+                "sequences so the blocks grow — with N sequences a threshold "
+                "above (N-1)/N still demands that every one of them agree, so on "
+                "a large set 0.98 behaves exactly like 1.00."
+            )
+
+        worst, label, advice = max(
+            ((gc_fail, f"the GC window ({req.primer3.primer_min_gc}-"
+                       f"{req.primer3.primer_max_gc}%)",
+              "widen the GC window, or pick a conserved block whose base "
+              "composition is closer to the rest of the target"),
+             (tm_fail, f"the Tm window ({req.primer3.primer_min_tm}-"
+                       f"{req.primer3.primer_max_tm} °C)",
+              "widen the Tm window, or allow longer primers so a low-GC block "
+              "can still reach the required Tm")),
+            key=lambda x: x[0])
+
+        return (
+            f"{inside:,} candidate primers did fit inside a conserved block, so "
+            "the blocks are not too short — but every one of them was rejected, "
+            f"{worst:,} of them on {label}. The conserved sequence itself is the "
+            f"problem, not its length. ({excluded:,} further candidates fell "
+            "outside the blocks.) Next steps: " + advice + "; or lower the "
+            "conservation identity threshold so longer, more representative "
+            "blocks become available."
+        )
 
     size_fail = got("unacceptable product size")
     probe_fail = got("no internal oligo")
@@ -471,28 +536,33 @@ def _divergence_table(aligned: list[dict[str, str]],
 
 
 def _feasible_product_range(blocks: list[dict[str, Any]],
-                            min_primer: int) -> tuple[int, int]:
+                            min_primer: int) -> tuple[int, int] | None:
     """Smallest and largest amplicon the conserved-block layout allows.
 
     The forward primer must fit inside one block and the reverse inside the
     same or a later one, so the shortest product puts both primers as close to
     the facing block edges as their length permits.
+
+    Returns None when no product is possible at all — a single block shorter
+    than two primers, for instance. Reporting a range in that case would print
+    an impossible window such as "36-28 bp".
     """
     ordered = sorted(blocks, key=lambda b: b["ref_start"])
     smallest = None
     for i, a in enumerate(ordered):
         for b in ordered[i:]:
             if b is a:
-                if a["length"] >= 2 * min_primer:
-                    candidate = 2 * min_primer
-                else:
-                    continue
+                if a["length"] < 2 * min_primer:
+                    continue          # one block cannot hold both primers
+                candidate = 2 * min_primer
             else:
                 candidate = b["ref_start"] - a["ref_end"] + 2 * min_primer
             if smallest is None or candidate < smallest:
                 smallest = candidate
+    if smallest is None:
+        return None
     largest = ordered[-1]["ref_end"] - ordered[0]["ref_start"] + 1
-    return (smallest if smallest is not None else 2 * min_primer, largest)
+    return (smallest, largest) if smallest <= largest else None
 
 
 def _block_of(oligo: dict[str, Any], blocks: list[dict[str, Any]]) -> int | None:

@@ -19,6 +19,8 @@ const state = {
 /* ─── boot ──────────────────────────────────────────────────────────── */
 
 document.addEventListener('DOMContentLoaded', () => {
+  I18N.init();
+  syncLangButton();
   wireUp();
   health();
   updateQueryPreview();
@@ -28,25 +30,49 @@ document.addEventListener('DOMContentLoaded', () => {
   if (saved) document.documentElement.setAttribute('data-theme', saved);
 });
 
+/* Turkish writes the sign before the number (%95), English after it (95%). */
+const pct = (v) => v === null || v === undefined || v === '—'
+  ? '—' : (I18N.lang === 'tr' ? `%${v}` : `${v}%`);
+
+/* The button offers the other language, which is what the user is asking for. */
+function syncLangButton() {
+  $('langToggle').textContent = I18N.lang === 'tr' ? 'EN' : 'TR';
+}
+
+/** Switch language and rebuild everything JavaScript wrote, since applyStatic()
+    only reaches the markup that came from index.html. */
+function switchLanguage() {
+  I18N.setLang(I18N.lang === 'tr' ? 'en' : 'tr');
+  syncLangButton();
+  health();
+  updateQueryPreview();
+  pollActive();
+  if (state.searchResult) renderHits();
+  if (state.result) renderResult();
+  if (!$('history').classList.contains('hidden')) loadHistory();
+}
+
 async function health() {
   try {
     const h = await api('/api/health');
     const el = $('health');
     if (h.status === 'ok') {
       el.className = 'pill pill-ok';
-      el.textContent = 'araçlar hazır';
+      el.textContent = t('app.toolsReady');
     } else {
       el.className = 'pill pill-bad';
-      el.textContent = 'eksik: ' + h.missing_tools.join(', ');
+      el.textContent = t('app.toolsMissing', { list: h.missing_tools.join(', ') });
     }
     el.title = Object.entries(h.versions).map(([k, v]) => `${k}: ${v}`).join('\n');
   } catch {
     $('health').className = 'pill pill-bad';
-    $('health').textContent = 'backend yanıt vermiyor';
+    $('health').textContent = t('app.backendDown');
   }
 }
 
 function wireUp() {
+  $('langToggle').onclick = switchLanguage;
+
   $('themeToggle').onclick = () => {
     const root = document.documentElement;
     const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -120,7 +146,7 @@ function wireUp() {
   $('historyRebuild').onclick = async () => {
     const r = await api('/api/history/rebuild', {});
     await loadHistory();
-    alert(`${r.imported} çalıştırma diskten yeniden indekslendi.`);
+    alert(t('h.rebuilt', { n: r.imported }));
   };
   let searchTimer = null;
   $('historySearch').addEventListener('input', () => {
@@ -155,23 +181,23 @@ async function loadHistory() {
 
   const s = data.stats;
   $('historyStats').innerHTML = [
-    ['çalıştırma', s.runs ?? 0],
-    ['başarılı', s.done ?? 0],
-    ['hatalı', s.failed ?? 0],
-    ['primer çifti', s.pairs ?? 0],
-    ['oligo', s.oligos ?? 0],
-    ['farklı gen', s.genes ?? 0],
-    ['veritabanı', ((s.db_bytes || 0) / 1024).toFixed(0) + ' KB'],
+    [t('h.stat.runs'), s.runs ?? 0],
+    [t('h.stat.done'), s.done ?? 0],
+    [t('h.stat.failed'), s.failed ?? 0],
+    [t('h.stat.pairs'), s.pairs ?? 0],
+    [t('h.stat.oligos'), s.oligos ?? 0],
+    [t('h.stat.genes'), s.genes ?? 0],
+    [t('h.stat.db'), ((s.db_bytes || 0) / 1024).toFixed(0) + ' KB'],
   ].map(([k, v]) => `<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
 
   const tbody = $('historyTable').querySelector('tbody');
   if (!data.runs.length) {
-    tbody.innerHTML = '<tr><td colspan="11">Kayıt yok.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="11">${t('h.empty')}</td></tr>`;
     return;
   }
   tbody.innerHTML = data.runs.map(r => {
     const ok = r.status === 'done';
-    const cov = r.best_coverage == null ? '—' : '%' + r.best_coverage;
+    const cov = pct(r.best_coverage);
     return `<tr>
       <td class="mono">${esc((r.created || '').replace('T', ' ').slice(0, 16))}</td>
       <td>${esc(r.gene_label || '—')}</td>
@@ -182,11 +208,11 @@ async function loadHistory() {
       <td class="num">${r.n_pairs ?? 0}</td>
       <td class="num">${cov}</td>
       <td class="num">${r.elapsed_s ?? '—'}</td>
-      <td>${ok ? '<span class="tag-ok">tamam</span>'
-               : `<span class="tag-bad" title="${esc(r.error || '')}">hata</span>`}</td>
+      <td>${ok ? `<span class="tag-ok">${t('h.ok')}</span>`
+               : `<span class="tag-bad" title="${esc(r.error || '')}">${t('h.err')}</span>`}</td>
       <td class="row gap">
-        <button class="btn btn-ghost btn-sm" data-detail="${esc(r.job_id)}">Özet</button>
-        ${ok ? `<button class="btn btn-ghost btn-sm" data-open="${esc(r.job_id)}">Aç</button>` : ''}
+        <button class="btn btn-ghost btn-sm" data-detail="${esc(r.job_id)}">${t('h.summary')}</button>
+        ${ok ? `<button class="btn btn-ghost btn-sm" data-open="${esc(r.job_id)}">${t('h.open')}</button>` : ''}
       </td></tr>`;
   }).join('');
 
@@ -207,7 +233,7 @@ async function showRunDetail(jobId) {
     <td class="num">${p.length}</td><td class="num">${p.tm ?? '—'}</td>
     <td class="num">${p.gc_percent ?? '—'}</td>
     <td class="num">${p.product_size ?? '—'}</td>
-    <td class="num">${p.perfect_percent == null ? '—' : '%' + p.perfect_percent}</td>
+    <td class="num">${pct(p.perfect_percent)}</td>
   </tr>`).join('');
 
   const records = run.records.map(r => `<tr>
@@ -215,7 +241,8 @@ async function showRunDetail(jobId) {
     <td><span class="truncate" title="${esc(r.description || '')}">${esc(r.description || '')}</span></td>
     <td class="num">${(r.length || 0).toLocaleString()}</td>
     <td class="num">${r.coverage == null ? '—' : (100 * r.coverage).toFixed(1)}</td>
-    <td>${r.used_in_conservation ? '<span class="tag-ok">evet</span>' : '<span class="tag-warn">hayır</span>'}</td>
+    <td>${r.used_in_conservation ? `<span class="tag-ok">${t('m.yes')}</span>`
+                                   : `<span class="tag-warn">${t('m.no')}</span>`}</td>
   </tr>`).join('');
 
   $('historyDetail').innerHTML = `<div class="card">
@@ -224,14 +251,19 @@ async function showRunDetail(jobId) {
       <span class="hint mono">${esc(run.workdir || '')}</span>
     </div>
     ${run.error ? `<div class="error">${esc(run.error)}</div>` : ''}
-    ${primers ? `<h4 class="sub">Oligolar</h4><div class="table-wrap"><table class="data-table">
-      <thead><tr><th class="num">Çift</th><th>Rol</th><th>Dizi 5'→3'</th>
-        <th class="num">nt</th><th class="num">Tm</th><th class="num">GC %</th>
-        <th class="num">Ürün bp</th><th class="num">Tam eşleşme</th></tr></thead>
+    ${primers ? `<h4 class="sub">${t('h.oligos')}</h4><div class="table-wrap"><table class="data-table">
+      <thead><tr><th class="num">${t('tbl.pair')}</th><th>${t('tbl.role')}</th>
+        <th>${t('tbl.sequence53')}</th>
+        <th class="num">${t('tbl.nt')}</th><th class="num">${t('tbl.tm')}</th>
+        <th class="num">${t('tbl.gc')}</th>
+        <th class="num">${t('tbl.productBp')}</th>
+        <th class="num">${t('tbl.perfect')}</th></tr></thead>
       <tbody>${primers}</tbody></table></div>` : ''}
-    ${records ? `<h4 class="sub">Kullanılan kayıtlar</h4><div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Accession</th><th>Tanım</th><th class="num">bp</th>
-        <th class="num">Kapsama %</th><th>Korunmuşluk hesabında</th></tr></thead>
+    ${records ? `<h4 class="sub">${t('h.usedRecords')}</h4><div class="table-wrap"><table class="data-table">
+      <thead><tr><th>${t('s2.accession')}</th><th>${t('s2.description')}</th>
+        <th class="num">bp</th>
+        <th class="num">${t('tbl.coveragePct')}</th>
+        <th>${t('tbl.inConservation')}</th></tr></thead>
       <tbody>${records}</tbody></table></div>` : ''}
     <div class="row gap mt">
       <a class="btn btn-ghost btn-sm" href="/api/job/${esc(run.job_id)}/file/primers.tsv" download>primers.tsv</a>
@@ -246,7 +278,7 @@ async function openPastRun(jobId) {
   try {
     state.result = await api(`/api/job/${jobId}/result`);
   } catch (e) {
-    alert('Bu çalıştırmanın tam sonucu okunamadı: ' + e.message);
+    alert(t('h.cannotOpen', { error: e.message }));
     return;
   }
   state.designJob = jobId;
@@ -274,22 +306,14 @@ async function updateQueryPreview() {
 
 /* ─── live "what is running now" ────────────────────────────────────── */
 
-const PIPELINE_STEPS = [
-  { stage: 'search', label: 'NCBI arama' },
-  { stage: 'download', label: 'İndirme' },
-  { stage: 'trim', label: 'Homoloji kırpma' },
-  { stage: 'align', label: 'Hizalama' },
-  { stage: 'conservation', label: 'Korunmuşluk' },
-  { stage: 'primer3', label: 'Primer3' },
-  { stage: 'validate', label: 'Doğrulama' },
-];
+const PIPELINE_STAGES = ['search', 'download', 'trim', 'align',
+                         'conservation', 'primer3', 'validate'];
 
 function renderPipelineSteps(currentStage) {
-  const order = PIPELINE_STEPS.map(s => s.stage);
-  const at = order.indexOf(currentStage);
-  $('pipelineSteps').innerHTML = PIPELINE_STEPS.map((s, i) => {
+  const at = PIPELINE_STAGES.indexOf(currentStage);
+  $('pipelineSteps').innerHTML = PIPELINE_STAGES.map((stage, i) => {
     const cls = at < 0 ? '' : (i < at ? 'done' : (i === at ? 'active' : ''));
-    return `<span class="pstep ${cls}">${esc(s.label)}</span>`;
+    return `<span class="pstep ${cls}">${esc(t('stage.' + stage))}</span>`;
   }).join('');
 }
 
@@ -297,8 +321,8 @@ function showRunning(job) {
   const running = job.status === 'running' || job.status === 'queued';
   $('runSpinner').classList.toggle('hidden', !running);
   $('nowTool').textContent = running
-    ? (job.tool || 'hazırlanıyor')
-    : (job.status === 'done' ? 'bitti' : 'durdu');
+    ? (job.tool || t('run.preparing'))
+    : (job.status === 'done' ? t('run.finished') : t('run.stopped'));
   $('stageLabel').textContent = job.stage || '—';
   $('toolElapsed').textContent =
     job.tool_elapsed_s != null ? job.tool_elapsed_s.toFixed(0) + ' s' : '—';
@@ -315,8 +339,8 @@ async function pollActive() {
       badge.classList.add('hidden');
     } else {
       badge.classList.remove('hidden');
-      const tools = a.tools.length ? a.tools.join(', ') : 'hazırlanıyor';
-      badge.textContent = `${a.count} iş çalışıyor · ${tools}`;
+      const tools = a.tools.length ? a.tools.join(', ') : t('run.preparing');
+      badge.textContent = t('run.jobsRunning', { n: a.count, tools });
       badge.title = a.jobs
         .map(j => `${j.kind} ${j.id}: ${j.stage} — ${j.tool || '—'}`).join('\n');
     }
@@ -343,9 +367,7 @@ async function startSearch() {
   const given = state.inputType === 'sequence'
     ? body.text : (body.gene || body.raw_query || body.organism);
   if (!given || given.trim().length < 3) {
-    alert(state.inputType === 'sequence'
-      ? 'Önce bir gen dizisi yapıştır.'
-      : 'Önce bir gen adı yaz (ör. invA).');
+    alert(t(state.inputType === 'sequence' ? 's1.needSequence' : 's1.needGene'));
     return;
   }
 
@@ -353,7 +375,7 @@ async function startSearch() {
     const { job_id } = await api('/api/search', body);
     state.searchJob = job_id;
     showStep(3);
-    $('runTitle').textContent = 'NCBI aranıyor…';
+    $('runTitle').textContent = t('run.searchingNcbi');
     const job = await pollJob(job_id);
     if (job.status === 'error') return showError(job.error);
     state.searchResult = await api(`/api/job/${job_id}/result`);
@@ -368,15 +390,16 @@ function renderHits() {
   const r = state.searchResult;
   const tbody = $('hitTable').querySelector('tbody');
   if (!r.hits.length) {
-    tbody.innerHTML = '<tr><td colspan="7">Eşleşme bulunamadı. Eşikleri gevşet ya da farklı bir veritabanı dene.</td></tr>';
-    $('hitSummary').textContent = '0 kayıt';
+    tbody.innerHTML = `<tr><td colspan="7">${t('s2.noHits')}</td></tr>`;
+    $('hitSummary').textContent = '';
     return;
   }
   $('hitSummary').innerHTML =
-    `${r.n_hits} aday kayıt · kaynak: ${r.input_type === 'sequence'
-      ? `BLAST (${esc(r.database)}), identity ve coverage eşikleri uygulandı`
-      : 'Entrez nucleotide (identity/coverage bilgisi yok)'} · ${r.elapsed_s}s`
-    + (r.entrez_query ? `<br>çalıştırılan sorgu: <code>${esc(r.entrez_query)}</code>` : '');
+    (r.input_type === 'sequence'
+      ? t('s2.summaryBlast', { n: r.n_hits, db: esc(r.database), s: r.elapsed_s })
+      : t('s2.summaryEntrez', { n: r.n_hits, s: r.elapsed_s }))
+    + (r.entrez_query
+        ? `<br>${t('s2.queryRun')}: <code>${esc(r.entrez_query)}</code>` : '');
 
   tbody.innerHTML = r.hits.map((h, i) => `
     <tr>
@@ -406,7 +429,7 @@ async function startDesign() {
     .filter(c => c.checked)
     .map(c => state.searchResult.hits[+c.dataset.idx]);
 
-  if (!picked.length) { alert('En az bir kayıt seç.'); return; }
+  if (!picked.length) { alert(t('s2.needOne')); return; }
 
   const ranges = {};
   picked.forEach(h => { if (h.range) ranges[h.accession] = h.range; });
@@ -456,7 +479,7 @@ async function startDesign() {
     const { job_id } = await api('/api/design', body);
     state.designJob = job_id;
     showStep(3);
-    $('runTitle').textContent = `Tasarım çalışıyor — ${picked.length} dizi`;
+    $('runTitle').textContent = t('run.designing', { n: picked.length });
     const job = await pollJob(job_id);
     if (job.status === 'error') return showError(job.error);
     state.result = await api(`/api/job/${job_id}/result`);
@@ -492,10 +515,10 @@ async function pollJob(jobId) {
 }
 
 function showError(msg) {
-  $('runError').textContent = msg || 'Bilinmeyen hata.';
+  $('runError').textContent = msg || t('run.unknownError');
   $('runError').classList.remove('hidden');
   $('backAfterError').classList.remove('hidden');
-  $('runTitle').textContent = 'Başarısız';
+  $('runTitle').textContent = t('run.failed');
 }
 
 /* ─── step 4: results ───────────────────────────────────────────────── */
@@ -512,13 +535,14 @@ function renderResult() {
 
   const consPct = (100 * r.conserved_bp / r.reference.sequence.length).toFixed(1);
   $('stats').innerHTML = [
-    ['dizi', r.alignment.n],
-    ['hizalama', r.alignment.length.toLocaleString() + ' kolon'],
-    ['referans', r.reference.sequence.length.toLocaleString() + ' bp'],
-    ['korunmuş', `${r.conserved_bp.toLocaleString()} bp · %${consPct}`],
-    ['blok', r.blocks.length],
-    ['primer çifti', r.pairs.length],
-    ['süre', r.timings.total_s + ' s'],
+    [t('s4.stat.sequences'), r.alignment.n],
+    [t('s4.stat.alignment'),
+     `${r.alignment.length.toLocaleString()} ${t('s4.stat.columns')}`],
+    [t('s4.stat.reference'), r.reference.sequence.length.toLocaleString() + ' bp'],
+    [t('s4.stat.conserved'), `${r.conserved_bp.toLocaleString()} bp · ${pct(consPct)}`],
+    [t('s4.stat.blocks'), r.blocks.length],
+    [t('s4.stat.pairs'), r.pairs.length],
+    [t('s4.stat.time'), r.timings.total_s + ' s'],
   ].map(([k, v]) => `<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
 
   renderPairList();
@@ -537,29 +561,30 @@ function renderRecords() {
     const c = cov.get(label);
     const pct = c ? (100 * c.coverage).toFixed(1) : '—';
     const status = low.has(label)
-      ? '<span class="tag-warn">korunmuşluk hesabı dışı (kısmi kapsama)</span>'
-      : '<span class="tag-ok">korunmuşluk hesabında</span>';
+      ? `<span class="tag-warn">${t('m.outOfConservation')}</span>`
+      : `<span class="tag-ok">${t('m.inConservation')}</span>`;
     const rev = r.alignment.reversed && r.alignment.reversed[i]
-      ? ' <span class="hint">· ters çevrildi</span>' : '';
+      ? ` <span class="hint">${t('m.reversed')}</span>` : '';
     return `<tr><td class="mono">${esc(label)}</td>
       <td class="num">${c ? c.aligned_bp.toLocaleString() : '—'}</td>
       <td class="num">${pct}</td><td>${status}${rev}</td></tr>`;
   });
 
   const excluded = [
-    ...(r.download_failures || []).map(f => [f.accession, 'indirilemedi', f.reason]),
-    ...(r.trim_dropped || []).map(f => [f.accession, 'homoloji kırpmasında düştü', f.reason]),
+    ...(r.download_failures || []).map(f => [f.accession, t('m.downloadFailed'), f.reason]),
+    ...(r.trim_dropped || []).map(f => [f.accession, t('m.trimDropped'), f.reason]),
   ].map(([acc, kind, reason]) =>
     `<tr><td class="mono">${esc(acc)}</td><td colspan="2">${esc(kind)}</td>
      <td class="tag-bad">${esc(reason)}</td></tr>`);
 
   $('recordBox').innerHTML = `<div class="table-wrap"><table class="data-table">
-    <thead><tr><th>Kayıt</th><th class="num">Hizalanan bp</th>
-      <th class="num">Kapsama %</th><th>Durum</th></tr></thead>
+    <thead><tr><th>${t('tbl.record')}</th>
+      <th class="num">${t('tbl.alignedBp')}</th>
+      <th class="num">${t('tbl.coveragePct')}</th>
+      <th>${t('tbl.status')}</th></tr></thead>
     <tbody>${usedRows.join('')}${excluded.join('')}</tbody></table></div>
-    <p class="hint" style="margin-top:8px">Korunmuşluk
-      ${r.conservation_n}/${r.alignment.n} dizi üzerinden hesaplandı;
-      doğrulama ${r.alignment.n} dizinin tamamına karşı yapıldı.</p>`;
+    <p class="hint" style="margin-top:8px">${t('m.conservationFrom',
+       { n: r.conservation_n, total: r.alignment.n })}</p>`;
 }
 
 function renderPairList() {
@@ -568,7 +593,7 @@ function renderPairList() {
     const cov = p.coverage_percent;
     const covClass = cov === 100 ? 'tag-ok' : cov >= 90 ? 'tag-warn' : 'tag-bad';
     return `<div class="pair-card ${i === state.selectedPair ? 'selected' : ''}" data-i="${i}">
-      <div class="top"><span class="rank">Çift ${p.rank}</span>
+      <div class="top"><span class="rank">${t('s4.pair', { n: p.rank })}</span>
         <span class="hint">${p.product_size} bp</span></div>
       <div class="seqline fw">F ${esc(p.forward.sequence)}</div>
       <div class="seqline rv">R ${esc(p.reverse.sequence)}</div>
@@ -578,8 +603,8 @@ function renderPairList() {
         <span>ΔTm ${p.tm_difference ?? '—'}</span>
         <span>penalty ${p.pair_penalty ?? '—'}</span>
       </div>
-      <div class="meta"><span class="${covClass}">tam eşleşme %${cov}</span>
-        <span>blok F${p.block_hits.forward ?? '?'} / R${p.block_hits.reverse ?? '?'}</span></div>
+      <div class="meta"><span class="${covClass}">${t('s4.perfectMatch', { n: cov })}</span>
+        <span>${t('s4.block')} F${p.block_hits.forward ?? '?'} / R${p.block_hits.reverse ?? '?'}</span></div>
       <div class="bar"><i style="width:${cov}%"></i></div>
     </div>`;
   }).join('');
@@ -613,14 +638,16 @@ function renderBindingPanel() {
 
 function renderMetrics() {
   const p = state.result.pairs[state.selectedPair];
-  const roles = [['forward', 'Forward'], ['reverse', 'Reverse']]
-    .concat(p.probe ? [['probe', 'Probe']] : []);
+  const roles = [['forward', t('tbl.forward')], ['reverse', t('tbl.reverse')]]
+    .concat(p.probe ? [['probe', t('tbl.probe')]] : []);
 
-  const head = `<thead><tr><th>Oligo</th><th class="mono">Dizi 5'→3'</th>
-    <th class="num">nt</th><th class="num">Tm °C</th><th class="num">GC %</th>
-    <th class="num">Konum (ref)</th><th class="num">Hairpin °C</th>
-    <th class="num">Self-any °C</th><th class="num">Self-end °C</th>
-    <th class="num">Tam eşleşme</th></tr></thead>`;
+  const head = `<thead><tr><th>${t('tbl.oligo')}</th>
+    <th class="mono">${t('tbl.sequence53')}</th>
+    <th class="num">${t('tbl.nt')}</th><th class="num">${t('tbl.tm')}</th>
+    <th class="num">${t('tbl.gc')}</th>
+    <th class="num">${t('tbl.position')}</th><th class="num">${t('tbl.hairpin')}</th>
+    <th class="num">${t('tbl.selfAny')}</th><th class="num">${t('tbl.selfEnd')}</th>
+    <th class="num">${t('tbl.perfect')}</th></tr></thead>`;
 
   const rows = roles.map(([key, label]) => {
     const o = p[key], b = p.binding[key];
@@ -631,18 +658,18 @@ function renderMetrics() {
       <td class="num">${o.hairpin_th ?? '—'}</td>
       <td class="num">${o.self_any_th ?? '—'}</td>
       <td class="num">${o.self_end_th ?? '—'}</td>
-      <td class="num">${b.n_perfect}/${b.n_sequences} (%${b.perfect_percent})</td></tr>`;
+      <td class="num">${b.n_perfect}/${b.n_sequences} (${pct(b.perfect_percent)})</td></tr>`;
   }).join('');
 
-  const sizes = p.amplicons.map(a => a.product_size);
-  const uniq = [...new Set(sizes)].sort((a, b) => a - b);
-  const extra = `<tr><td colspan="10" class="hint">
-    Çift penalty ${p.pair_penalty ?? '—'} · ΔTm ${p.tm_difference ?? '—'} °C ·
-    ürün ${p.product_size} bp (referansta) · ürün Tm ${p.product_tm ?? '—'} °C ·
-    F×R compl-any ${p.compl_any_th ?? '—'} °C, compl-end ${p.compl_end_th ?? '—'} °C ·
-    dizilerdeki gerçek ürün boyu: ${uniq.length === 1 ? uniq[0] + ' bp (hepsi aynı)'
-      : uniq[0] + '–' + uniq[uniq.length - 1] + ' bp'}
-  </td></tr>`;
+  const uniq = [...new Set(p.amplicons.map(a => a.product_size))].sort((a, b) => a - b);
+  const sizes = uniq.length === 1
+    ? t('m.allSame', { n: uniq[0] })
+    : `${uniq[0]}–${uniq[uniq.length - 1]} bp`;
+  const extra = `<tr><td colspan="10" class="hint">${t('m.pairSummary', {
+    penalty: p.pair_penalty ?? '—', dtm: p.tm_difference ?? '—',
+    size: p.product_size, ptm: p.product_tm ?? '—',
+    any: p.compl_any_th ?? '—', end: p.compl_end_th ?? '—', sizes,
+  })}</td></tr>`;
 
   $('metricsTable').innerHTML = head + '<tbody>' + rows + extra + '</tbody>';
 }
@@ -651,7 +678,8 @@ function renderSpecificity() {
   const s = state.result.specificity;
   const box = $('specificityBox');
   if (!s || !s.available) {
-    box.innerHTML = `<p class="hint">Yapılmadı: ${esc(s?.reason || 'kapalı')}</p>`;
+    box.innerHTML = `<p class="hint">${t('m.notDone',
+      { reason: esc(s?.reason || t('m.off')) })}</p>`;
     return;
   }
   const rows = s.oligos.map(o => {
@@ -663,29 +691,40 @@ function renderSpecificity() {
       <td class="num ${cls}">${multi}</td></tr>`;
   }).join('');
   box.innerHTML = `<div class="table-wrap"><table class="data-table">
-    <thead><tr><th>Oligo</th><th class="num">Toplam bağlanma yeri</th>
-    <th class="num">Kaç dizide</th><th class="num">Birden fazla yer</th></tr></thead>
+    <thead><tr><th>${t('tbl.oligo')}</th>
+    <th class="num">${t('tbl.totalSites')}</th>
+    <th class="num">${t('tbl.inHowMany')}</th>
+    <th class="num">${t('tbl.multiSite')}</th></tr></thead>
     <tbody>${rows}</tbody></table></div>
     <p class="hint" style="margin-top:8px">${esc(s.note)}</p>`;
 }
 
+/* Deliberately English in both interface languages: this block names tools,
+   versions and parameters, and is what gets pasted into a methods section or an
+   issue report. Translating it would make those unreproducible. */
 function renderMethods() {
   const r = state.result;
   const c = r.settings.conservation, p = r.settings.primer3;
   $('methodsBox').textContent = [
-    `Girdi: ${r.records.length} NCBI kaydı${r.query_included ? ' + girilen dizi' : ''}`,
-    `Hizalama: MAFFT --auto (${r.tool_versions.mafft}) → ${r.alignment.n} × ${r.alignment.length} kolon`,
-    `Referans: ${r.reference.label} (${r.reference.mode}), ${r.reference.sequence.length} bp`,
-    `Korunmuşluk: kolon identity >= ${c.identity_threshold}, gap oranı <= ${c.max_gap_fraction},`,
-    `  minimum blok ${c.min_block_length} bp → ${r.blocks.length} blok, ${r.conserved_bp} bp`,
-    `Primer3: ${r.tool_versions.primer3_core}, mod ${p.mode}`,
+    `Input: ${r.records.length} NCBI record(s)${r.query_included ? ' + the pasted query sequence' : ''}`,
+    `Alignment: MAFFT --auto --adjustdirection (${r.tool_versions.mafft}) → ${r.alignment.n} × ${r.alignment.length} columns`,
+    `Reference: ${r.reference.label} (${r.reference.mode}), ${r.reference.sequence.length} bp`,
+    `Conservation: column identity >= ${c.identity_threshold}, gap fraction <= ${c.max_gap_fraction},`,
+    `  minimum block ${c.min_block_length} bp, minimum record coverage ${c.min_record_coverage}`,
+    `  → ${r.blocks.length} block(s), ${r.conserved_bp} bp; computed from ${r.conservation_n}/${r.alignment.n} sequences`,
+    `Primer3: ${r.tool_versions.primer3_core}, task ${p.mode}`,
     `  Tm ${p.primer_min_tm}-${p.primer_opt_tm}-${p.primer_max_tm} °C, GC ${p.primer_min_gc}-${p.primer_max_gc} %,`,
-    `  uzunluk ${p.primer_min_size}-${p.primer_max_size} nt, ürün ${p.product_min}-${p.product_max} bp,`,
-    `  değişken bölgeler SEQUENCE_EXCLUDED_REGION olarak verildi (${r.excluded_regions.length} bölge)`,
-    `Spesifiklik: ${r.specificity.available ? r.tool_versions.blastn + ' (yalnız indirilen diziler)' : 'yapılmadı'}`,
-    `Süreler: ${JSON.stringify(r.timings)}`,
-    `Çıktı dizini: ${r.workdir}`,
-    r.primer3_warning ? `Primer3 uyarısı: ${r.primer3_warning}` : '',
+    `  length ${p.primer_min_size}-${p.primer_max_size} nt, product ${p.product_min}-${p.product_max} bp,`,
+    `  variable regions passed as SEQUENCE_EXCLUDED_REGION (${r.excluded_regions.length} region(s))`,
+    p.mode === 'qpcr'
+      ? `  internal oligo: Tm ${p.probe_min_tm}-${p.probe_opt_tm}-${p.probe_max_tm} °C, length ${p.probe_min_size}-${p.probe_max_size} nt`
+      : '',
+    `Specificity: ${r.specificity.available
+      ? r.tool_versions.blastn + ' (downloaded sequences only; not a genome-wide check)'
+      : 'not run'}`,
+    `Timings: ${JSON.stringify(r.timings)}`,
+    `Output directory: ${r.workdir}`,
+    r.primer3_warning ? `Primer3 warning: ${r.primer3_warning}` : '',
     `Primer3 explain — left: ${r.primer3_explain.left}`,
     `Primer3 explain — right: ${r.primer3_explain.right}`,
     `Primer3 explain — pair: ${r.primer3_explain.pair}`,
@@ -716,10 +755,16 @@ function setupCanvas() {
         tip.classList.remove('hidden');
         tip.style.left = (e.clientX + 14) + 'px';
         tip.style.top = (e.clientY - 10) + 'px';
-        tip.textContent =
-          `kolon ${col + 1}\nkonsensüs ${r.profile.major[col]} (${r.profile.code[col]})\n` +
-          `identity ${(r.profile.identity[col] * 100).toFixed(0)}%  gap ${(r.profile.gap[col] * 100).toFixed(0)}%\n` +
-          (block ? `korunmuş blok #${block.rank} (${block.length} bp)` : 'değişken bölge');
+        tip.textContent = [
+          t('s4.tipColumn', { n: col + 1 }),
+          t('s4.tipConsensus', { base: r.profile.major[col], code: r.profile.code[col] }),
+          t('s4.tipIdentity', {
+            id: (r.profile.identity[col] * 100).toFixed(0),
+            gap: (r.profile.gap[col] * 100).toFixed(0),
+          }),
+          block ? t('s4.tipBlock', { rank: block.rank, len: block.length })
+                : t('s4.tipVariable'),
+        ].join('\n');
       }
     }
     if (state.drag && Math.abs(state.drag.x1 - state.drag.x0) > 3) drawSelection();
@@ -767,9 +812,9 @@ function redrawAll() {
   });
   const v = state.view;
   $('alnRuler').innerHTML =
-    `<span>kolon ${(v.start + 1).toLocaleString()}</span>` +
-    `<span>${(v.end - v.start).toLocaleString()} kolon görünüyor</span>` +
-    `<span>kolon ${v.end.toLocaleString()}</span>`;
+    `<span>${t('s4.rulerColumn', { n: (v.start + 1).toLocaleString() })}</span>` +
+    `<span>${t('s4.rulerVisible', { n: (v.end - v.start).toLocaleString() })}</span>` +
+    `<span>${t('s4.rulerColumn', { n: v.end.toLocaleString() })}</span>`;
 }
 
 /* ─── helpers ───────────────────────────────────────────────────────── */

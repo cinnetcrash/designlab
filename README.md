@@ -243,10 +243,12 @@ deleted afterwards:
 ```bash
 python3 tests/test_core_offline.py     # no network; runs real MAFFT and Primer3
 python3 tests/test_entrez_query.py     # Entrez query builder, no network
+python3 tests/test_diagnostics.py      # failure messages name the right cause
 python3 tests/test_db.py               # run database, in a temporary data dir
+node    tests/test_i18n.js             # TR/EN dictionaries and markup coverage
 node    tests/test_viz_headless.js     # renders the newest job result in a stubbed DOM
 node    tests/test_frontend_flow.js    # whole UI flow against a running server
-node    tests/test_frontend_flow.js --blast   # same, via the NCBI BLAST route
+node    tests/test_frontend_flow.js --blast --lang=en   # BLAST route, English UI
 ```
 
 `install.sh` runs the offline ones for you at the end of the install.
@@ -255,6 +257,17 @@ node    tests/test_frontend_flow.js --blast   # same, via the NCBI BLAST route
 conserved block, that Primer3 coordinates match the reference sequence, that
 reverse-primer coordinates reverse-complement correctly, and that a planted
 substitution is reported at the right offset from the 3' end.
+
+`test_diagnostics.py` is a regression test for failure messages that were wrong
+in the field. A design that fails is normal; a design that fails and blames the
+wrong constraint costs an afternoon of turning the wrong dial. It pins the real
+counters from a run where a single 28 bp conserved block held 60 candidate
+primers that all failed the GC window — the message must blame the block's base
+composition, not its length.
+
+`test_i18n.js` fails if the two dictionaries drift apart, if a key is used but
+undefined (or defined but unused), or if any Turkish string is hard-coded
+outside the dictionary.
 
 `test_entrez_query.py` checks that plain words become a valid query, that a raw
 query overrides them but still gets the length and master-record filters, that
