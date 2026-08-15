@@ -44,8 +44,8 @@ def run_mafft(records: list[dict[str, Any]],
             fh.write(f">s{i}\n{rec['sequence']}\n")
 
     progress(f"MAFFT --auto --adjustdirection on {len(records)} sequences")
-    cmd = [config.MAFFT_BIN, "--auto", "--adjustdirection", "--quiet",
-           "--preservecase", str(in_path)]
+    cmd = config.tool_argv(config.MAFFT_BIN, "--auto", "--adjustdirection",
+                           "--quiet", "--preservecase", str(in_path))
     proc = subprocess.run(cmd, capture_output=True, text=True,
                           timeout=config.MAFFT_TIMEOUT)
     if proc.returncode != 0:

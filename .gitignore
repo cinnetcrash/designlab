@@ -6,3 +6,6 @@ data/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Portable Windows builds fetched by install.ps1 -WithTools
+tools/

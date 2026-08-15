@@ -54,6 +54,45 @@ then `PYTHON=python3.12 bash install.sh`) or use the conda route below.
 Ubuntu's `ncbi-blast+` is 2.12 while bioconda ships 2.16. Both work here; 2.16
 is only worth chasing if you also use BLAST elsewhere and want one version.
 
+### Windows
+
+**These scripts have not been run on Windows.** They were written on Linux,
+mirror the bash ones, and were reviewed by hand — but nothing here has executed
+on a Windows machine. Report what breaks rather than working around it. The
+Python code itself is portable and its Windows-specific branches are covered by
+`tests/test_portability.py`, which does run in CI on Linux.
+
+```powershell
+git clone https://github.com/cinnetcrash/primer-designer.git
+cd primer-designer
+.\install.ps1                 # add -WithTools to fetch the portable Primer3 build
+.\run.ps1                     # http://127.0.0.1:8090
+```
+
+If PowerShell refuses to run them, that is the execution policy, not the script:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+The three external programs, all verified to exist as Windows builds:
+
+| Tool | Where | Note |
+|---|---|---|
+| Primer3 | [`primer3-2.6.1_exe_for_windows.zip`](https://github.com/primer3-org/primer3/releases) | Official release asset; `-WithTools` downloads and unpacks this one |
+| BLAST+ | [`ncbi-blast-<version>+-win64.exe`](https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/) | NCBI installer, or the `x64-win64.tar.gz` portable archive |
+| MAFFT | [all-in-one package](https://mafft.cbrc.jp/alignment/software/windows.html) | MAFFT's own documentation notes it "may be slow, depending on anti-virus software" and lacks RNA structural alignment |
+
+Two Windows details the code handles: the MAFFT all-in-one package installs
+`mafft.bat`, and Python's subprocess cannot execute a `.bat` directly
+(WinError 193), so batch files are dispatched through `cmd.exe`; and the Windows
+Primer3 zip keeps `primer3_config` next to `primer3_core.exe`, which is now one
+of the places the thermodynamic parameter directory is searched for.
+
+MAFFT's maintainers recommend the WSL build over the all-in-one one for speed.
+If you hit that, `wsl --install` followed by the Ubuntu instructions above is
+the fallback — it is the same application, and that path is tested.
+
 ### Other systems
 
 ```bash
@@ -295,6 +334,7 @@ deleted afterwards:
 python3 tests/test_core_offline.py     # no network; runs real MAFFT and Primer3
 python3 tests/test_entrez_query.py     # Entrez query builder, no network
 python3 tests/test_diagnostics.py      # failure messages name the right cause
+python3 tests/test_portability.py      # Windows branches, exercised from Linux
 python3 tests/test_db.py               # run database, in a temporary data dir
 node    tests/test_i18n.js             # TR/EN dictionaries and markup coverage
 node    tests/test_viz_headless.js     # renders the newest job result in a stubbed DOM
@@ -315,6 +355,13 @@ wrong constraint costs an afternoon of turning the wrong dial. It pins the real
 counters from a run where a single 28 bp conserved block held 60 candidate
 primers that all failed the GC window — the message must blame the block's base
 composition, not its length.
+
+`test_portability.py` fakes `os.name` and the tool locations to exercise the
+Windows branches from Linux: batch files dispatched through `cmd.exe`, a
+backslash `primer3_config` path reaching Primer3 with a trailing separator, and
+no POSIX-only module imported anywhere in the backend. It cannot tell you
+whether the Windows builds of MAFFT, Primer3 and BLAST+ behave — that needs a
+Windows machine.
 
 `test_i18n.js` fails if the two dictionaries drift apart, if a key is used but
 undefined (or defined but unused), or if any Turkish string is hard-coded

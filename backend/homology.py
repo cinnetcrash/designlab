@@ -124,15 +124,16 @@ def _all_vs_all(records: list[dict[str, Any]],
             fh.write(f">r{i}\n{rec['sequence']}\n")
     try:
         subprocess.run(
-            [config.MAKEBLASTDB_BIN, "-in", str(fasta), "-dbtype", "nucl",
-             "-out", str(workdir / "anchordb")],
+            config.tool_argv(config.MAKEBLASTDB_BIN, "-in", str(fasta),
+                             "-dbtype", "nucl", "-out", str(workdir / "anchordb")),
             capture_output=True, text=True, check=True,
             timeout=config.BLAST_LOCAL_TIMEOUT)
         proc = subprocess.run(
-            [config.BLASTN_BIN, "-task", "blastn", "-query", str(fasta),
-             "-db", str(workdir / "anchordb"), "-evalue", "1e-10",
-             "-outfmt", "6 qseqid sseqid sstart send bitscore",
-             "-max_target_seqs", str(len(records) * 2), "-num_threads", "2"],
+            config.tool_argv(
+                config.BLASTN_BIN, "-task", "blastn", "-query", str(fasta),
+                "-db", str(workdir / "anchordb"), "-evalue", "1e-10",
+                "-outfmt", "6 qseqid sseqid sstart send bitscore",
+                "-max_target_seqs", str(len(records) * 2), "-num_threads", "2"),
             capture_output=True, text=True, timeout=config.BLAST_LOCAL_TIMEOUT)
     except subprocess.SubprocessError as exc:
         logger.warning("all-vs-all BLAST failed: %s", exc)
@@ -173,15 +174,16 @@ def trim_to_anchor(records: list[dict[str, Any]], anchor: str, anchor_name: str,
 
     try:
         subprocess.run(
-            [config.MAKEBLASTDB_BIN, "-in", str(db_fasta), "-dbtype", "nucl",
-             "-out", str(workdir / "trimdb")],
+            config.tool_argv(config.MAKEBLASTDB_BIN, "-in", str(db_fasta),
+                             "-dbtype", "nucl", "-out", str(workdir / "trimdb")),
             capture_output=True, text=True, check=True,
             timeout=config.BLAST_LOCAL_TIMEOUT)
         proc = subprocess.run(
-            [config.BLASTN_BIN, "-task", "blastn", "-query", str(q_fasta),
-             "-db", str(workdir / "trimdb"), "-evalue", "1e-20",
-             "-outfmt", "6 sseqid sstart send pident length bitscore",
-             "-max_target_seqs", str(len(records) * 5), "-num_threads", "2"],
+            config.tool_argv(
+                config.BLASTN_BIN, "-task", "blastn", "-query", str(q_fasta),
+                "-db", str(workdir / "trimdb"), "-evalue", "1e-20",
+                "-outfmt", "6 sseqid sstart send pident length bitscore",
+                "-max_target_seqs", str(len(records) * 5), "-num_threads", "2"),
             capture_output=True, text=True, timeout=config.BLAST_LOCAL_TIMEOUT)
     except subprocess.SubprocessError as exc:
         progress(f"Homology trimming skipped: BLAST failed ({exc}). "

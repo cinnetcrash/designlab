@@ -293,17 +293,18 @@ def local_specificity(oligos: list[dict[str, str]],
 
     try:
         subprocess.run(
-            [config.MAKEBLASTDB_BIN, "-in", str(db_fasta), "-dbtype", "nucl",
-             "-out", str(workdir / "db")],
+            config.tool_argv(config.MAKEBLASTDB_BIN, "-in", str(db_fasta),
+                             "-dbtype", "nucl", "-out", str(workdir / "db")),
             capture_output=True, text=True, timeout=config.BLAST_LOCAL_TIMEOUT,
             check=True,
         )
         proc = subprocess.run(
-            [config.BLASTN_BIN, "-task", "blastn-short", "-query", str(q_fasta),
-             "-db", str(workdir / "db"), "-word_size", "7", "-evalue", "1000",
-             "-outfmt", "6 qseqid sseqid pident length mismatch gapopen "
-                        "qstart qend sstart send evalue bitscore sstrand",
-             "-max_target_seqs", "5000", "-num_threads", "2"],
+            config.tool_argv(
+                config.BLASTN_BIN, "-task", "blastn-short", "-query", str(q_fasta),
+                "-db", str(workdir / "db"), "-word_size", "7", "-evalue", "1000",
+                "-outfmt", "6 qseqid sseqid pident length mismatch gapopen "
+                           "qstart qend sstart send evalue bitscore sstrand",
+                "-max_target_seqs", "5000", "-num_threads", "2"),
             capture_output=True, text=True, timeout=config.BLAST_LOCAL_TIMEOUT,
         )
     except subprocess.SubprocessError as exc:

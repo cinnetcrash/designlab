@@ -66,7 +66,11 @@ def build_boulder(sequence: str, seq_id: str, settings: Primer3Settings,
             "PRIMER_INTERNAL_MAX_POLY_X=4",
         ]
     if config.PRIMER3_CONFIG:
-        path = config.PRIMER3_CONFIG.rstrip("/") + "/"
+        # Primer3 requires a trailing separator on this path. Forward slashes
+        # are accepted on Windows too, so normalising to them keeps the boulder
+        # file identical across platforms — and a Windows path would otherwise
+        # end in a backslash that rstrip("/") never removes.
+        path = config.PRIMER3_CONFIG.replace("\\", "/").rstrip("/") + "/"
         lines.insert(0, f"PRIMER_THERMODYNAMIC_PARAMETERS_PATH={path}")
     if excluded:
         lines.append("SEQUENCE_EXCLUDED_REGION=" +
@@ -80,7 +84,7 @@ def run_primer3(sequence: str, seq_id: str, settings: Primer3Settings,
     """Run primer3_core and return parsed pairs plus its own explain output."""
     boulder = build_boulder(sequence, seq_id, settings, excluded)
     try:
-        proc = subprocess.run([config.PRIMER3_BIN], input=boulder,
+        proc = subprocess.run(config.tool_argv(config.PRIMER3_BIN), input=boulder,
                               capture_output=True, text=True,
                               timeout=config.PRIMER3_TIMEOUT)
     except FileNotFoundError as exc:
