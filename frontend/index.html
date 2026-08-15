@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Primer Designer</title>
+<link rel="stylesheet" href="/css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧬</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🧬</span>
+    <div>
+      <h1>Primer Designer</h1>
+      <p>NCBI → MAFFT → korunmuş bölge → Primer3 → in-silico doğrulama</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span id="health" class="pill pill-muted">araçlar kontrol ediliyor…</span>
+    <button id="historyBtn" class="btn btn-ghost btn-sm">Geçmiş</button>
+    <button id="themeToggle" class="btn btn-ghost" title="Tema">◐</button>
+  </div>
+</header>
+
+<nav class="stepper" id="stepper">
+  <button class="step active" data-step="1"><b>1</b> Hedef</button>
+  <button class="step" data-step="2"><b>2</b> Diziler</button>
+  <button class="step" data-step="3"><b>3</b> Tasarım</button>
+  <button class="step" data-step="4"><b>4</b> Sonuç</button>
+</nav>
+
+<main>
+
+<!-- ─────────────── HISTORY ─────────────── -->
+<section class="panel hidden" id="history">
+  <div class="row between wrap">
+    <h2>Çalıştırma geçmişi</h2>
+    <div class="row gap">
+      <input id="historySearch" type="text" class="input-search"
+             placeholder="gen adı, accession ya da primer dizisi…">
+      <select id="historyStatus" class="input-sm-wide">
+        <option value="">tümü</option>
+        <option value="done">başarılı</option>
+        <option value="error">hatalı</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" id="historyRefresh">Yenile</button>
+      <button class="btn btn-ghost btn-sm" id="historyRebuild"
+              title="data/jobs/ altındaki dizinleri yeniden tara">Diskten tara</button>
+      <button class="btn btn-ghost btn-sm" id="historyClose">Kapat</button>
+    </div>
+  </div>
+  <p class="hint">Bir primer dizisini yapıştırırsanız o primerin hangi
+    çalıştırmadan çıktığını bulur. Veritabanı yalnızca bir dizindir; asıl
+    çıktılar <code>data/jobs/&lt;job_id&gt;/</code> altında durur.</p>
+
+  <div class="stats" id="historyStats"></div>
+  <div class="table-wrap">
+    <table class="data-table" id="historyTable">
+      <thead>
+        <tr>
+          <th>Tarih</th><th>Gen</th><th>Mod</th>
+          <th class="num">Dizi</th><th class="num">Blok</th>
+          <th class="num">Korunmuş bp</th><th class="num">Çift</th>
+          <th class="num">En iyi kapsama</th><th class="num">Süre</th>
+          <th>Durum</th><th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div id="historyDetail"></div>
+</section>
+
+<!-- ─────────────── STEP 1 ─────────────── -->
+<section class="panel" id="step1">
+  <div class="grid grid-2">
+    <div>
+      <label class="field-label">Girdi tipi</label>
+      <div class="segmented" id="inputType">
+        <button class="seg active" data-value="sequence">Gen dizisi (BLAST)</button>
+        <button class="seg" data-value="query">Gen adı (Entrez)</button>
+      </div>
+
+      <div id="seqInputWrap">
+        <label class="field-label" for="seqInput">
+          Gen dizisi <span class="hint">FASTA ya da düz dizi — bu dizi NCBI'da BLAST edilir</span>
+        </label>
+        <textarea id="seqInput" rows="9" spellcheck="false"
+          placeholder=">hedef_gen&#10;ATGGCTAGCTAGCTAGCATCGATCGATCG…"></textarea>
+        <div class="row between">
+          <span class="hint" id="seqStats">0 bp</span>
+          <button class="btn btn-ghost btn-sm" id="loadExample">Örnek dizi yükle</button>
+        </div>
+      </div>
+
+      <div id="queryInputWrap" class="hidden">
+        <label class="field-label" for="queryInput">Entrez sorgusu</label>
+        <input id="queryInput" type="text" placeholder="rpoB[Gene] AND Salmonella[Organism]">
+        <label class="field-label" for="organismInput">Organizma filtresi (opsiyonel)</label>
+        <input id="organismInput" type="text" placeholder="Salmonella enterica">
+      </div>
+    </div>
+
+    <div>
+      <label class="field-label">Arama ayarları</label>
+      <div class="field-row">
+        <label for="database">Veritabanı</label>
+        <select id="database">
+          <option value="core_nt" selected>core_nt</option>
+          <option value="nt">nt</option>
+          <option value="refseq_rna">refseq_rna</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label for="maxHits">Aday kayıt sayısı</label>
+        <input id="maxHits" type="number" min="1" max="200" value="50">
+      </div>
+      <div class="field-row">
+        <label for="minIdentity">Min. identity %</label>
+        <input id="minIdentity" type="number" min="50" max="100" step="0.5" value="80">
+      </div>
+      <div class="field-row">
+        <label for="minCoverage">Min. query coverage %</label>
+        <input id="minCoverage" type="number" min="10" max="100" step="1" value="60">
+      </div>
+      <div class="field-row entrez-only hidden">
+        <label for="minLength">Min. uzunluk (bp)</label>
+        <input id="minLength" type="number" min="50" value="200">
+      </div>
+      <div class="field-row entrez-only hidden">
+        <label for="maxLength">Maks. uzunluk (bp)</label>
+        <input id="maxLength" type="number" min="100" value="20000">
+      </div>
+
+      <div class="note">
+        <b>Eşikler rapora yazılır.</b> BLAST uzak sunucuda çalışır (NCBI),
+        1–5 dakika sürebilir. Gen adı modu saniyeler içinde döner ama
+        identity/coverage bilgisi vermez.
+      </div>
+      <button class="btn btn-primary btn-lg" id="searchBtn">NCBI'da ara</button>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────── STEP 2 ─────────────── -->
+<section class="panel hidden" id="step2">
+  <div class="row between wrap">
+    <h2>Kaç dizi indirilsin?</h2>
+    <div class="row gap">
+      <input id="topN" type="number" min="1" value="12" class="input-sm" title="Seçilecek kayıt sayısı">
+      <button class="btn btn-ghost btn-sm" id="selectTopN">En iyi N'i seç</button>
+      <button class="btn btn-ghost btn-sm" id="selectAll">Tümü</button>
+      <button class="btn btn-ghost btn-sm" id="selectNone">Hiçbiri</button>
+    </div>
+  </div>
+  <p class="hint" id="hitSummary"></p>
+
+  <div class="table-wrap">
+    <table class="data-table" id="hitTable">
+      <thead>
+        <tr>
+          <th style="width:34px"></th>
+          <th>Accession</th><th>Tanım</th>
+          <th class="num">Identity %</th><th class="num">Coverage %</th>
+          <th class="num">Uzunluk</th><th class="num">E-value</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <h2 class="mt">Tasarım parametreleri</h2>
+  <div class="grid grid-3">
+    <div class="card">
+      <h3>Mod ve hedef</h3>
+      <div class="field-row">
+        <label for="mode">Mod</label>
+        <select id="mode">
+          <option value="standard" selected>Standart PCR</option>
+          <option value="qpcr">qPCR + hidroliz probu</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label for="geneLabel">Gen etiketi</label>
+        <input id="geneLabel" type="text" value="target">
+      </div>
+      <div class="field-row">
+        <label for="productMin">Ürün min (bp)</label>
+        <input id="productMin" type="number" value="100" min="40">
+      </div>
+      <div class="field-row">
+        <label for="productMax">Ürün maks (bp)</label>
+        <input id="productMax" type="number" value="800" min="60">
+      </div>
+      <div class="field-row">
+        <label for="numReturn">Kaç primer çifti</label>
+        <input id="numReturn" type="number" value="5" min="1" max="20">
+      </div>
+      <div class="field-row">
+        <label for="includeQuery">Girilen diziyi de hizala</label>
+        <input id="includeQuery" type="checkbox" checked>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Primer kısıtları</h3>
+      <div class="field-row"><label>Uzunluk (min/opt/maks)</label>
+        <span class="triple">
+          <input id="pMinSize" type="number" value="18"><input id="pOptSize" type="number" value="20"><input id="pMaxSize" type="number" value="25">
+        </span>
+      </div>
+      <div class="field-row"><label>Tm °C (min/opt/maks)</label>
+        <span class="triple">
+          <input id="pMinTm" type="number" step="0.5" value="57"><input id="pOptTm" type="number" step="0.5" value="60"><input id="pMaxTm" type="number" step="0.5" value="63">
+        </span>
+      </div>
+      <div class="field-row"><label>GC % (min/maks)</label>
+        <span class="triple two">
+          <input id="pMinGc" type="number" value="40"><input id="pMaxGc" type="number" value="60">
+        </span>
+      </div>
+      <div class="field-row"><label for="gcClamp">GC clamp</label><input id="gcClamp" type="number" value="1" min="0" max="3"></div>
+      <div class="field-row"><label for="maxPolyX">Maks. poly-X</label><input id="maxPolyX" type="number" value="4" min="2" max="10"></div>
+      <div class="field-row"><label for="maxHairpin">Maks. hairpin Tm °C</label><input id="maxHairpin" type="number" step="0.5" value="24"></div>
+
+      <div id="probeSettings" class="hidden">
+        <hr class="sep">
+        <div class="field-row"><label>Prob Tm °C (min/opt/maks)</label>
+          <span class="triple">
+            <input id="probeMinTm" type="number" step="0.5" value="66"><input id="probeOptTm" type="number" step="0.5" value="70"><input id="probeMaxTm" type="number" step="0.5" value="74">
+          </span>
+        </div>
+        <div class="field-row"><label>Prob uzunluk (min/opt/maks)</label>
+          <span class="triple">
+            <input id="probeMinSize" type="number" value="18"><input id="probeOptSize" type="number" value="22"><input id="probeMaxSize" type="number" value="27">
+          </span>
+        </div>
+        <p class="hint">Hidroliz probu Tm'i tipik olarak primerlerden 8-10 °C yüksek
+          seçilir. AT-zengin hedeflerde bu pencere tutmayabilir; Primer3 çift
+          bulamazsa hata mesajı engelin prob mu primer mi olduğunu söyler.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Korunmuşluk</h3>
+      <div class="field-row">
+        <label for="identityThreshold">Kolon identity eşiği</label>
+        <input id="identityThreshold" type="number" step="0.01" min="0.5" max="1" value="1">
+      </div>
+      <div class="field-row">
+        <label for="maxGapFraction">İzin verilen gap oranı</label>
+        <input id="maxGapFraction" type="number" step="0.05" min="0" max="0.5" value="0">
+      </div>
+      <div class="field-row">
+        <label for="minBlockLength">Min. blok uzunluğu (bp)</label>
+        <input id="minBlockLength" type="number" min="15" value="24">
+      </div>
+      <div class="field-row">
+        <label for="referenceMode">Referans dizi</label>
+        <select id="referenceMode">
+          <option value="consensus" selected>Konsensüs</option>
+          <option value="query">Girilen dizi</option>
+          <option value="first">İlk kayıt</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label for="minRecordCoverage" title="Hizalamayı bu oranın altında kaplayan kayıtlar korunmuşluk hesabından çıkarılır">
+          Min. kayıt kapsaması</label>
+        <input id="minRecordCoverage" type="number" step="0.05" min="0" max="1" value="0.6">
+      </div>
+      <div class="field-row">
+        <label for="trimHomology" title="Kayıtları hizalamadan önce ortak homolog bölgeye kırp">
+          Homolog bölgeye kırp</label>
+        <input id="trimHomology" type="checkbox" checked>
+      </div>
+      <div class="field-row">
+        <label for="specificityCheck">Yerel BLAST spesifiklik</label>
+        <input id="specificityCheck" type="checkbox" checked>
+      </div>
+      <p class="hint">Primerler yalnızca korunmuş bloklara yerleştirilir; blok
+        dışı bölgeler Primer3'e <code>SEQUENCE_EXCLUDED_REGION</code> olarak verilir.
+        Amplikon içi değişkenlik serbesttir. Contig kenarında kesilmiş kayıtlar
+        korunmuşluk hesabından çıkarılır ama yine de doğrulanır.</p>
+    </div>
+  </div>
+
+  <div class="row gap mt">
+    <button class="btn btn-ghost" id="backTo1">← Geri</button>
+    <button class="btn btn-primary btn-lg" id="designBtn">Seçilenleri indir ve tasarla</button>
+  </div>
+</section>
+
+<!-- ─────────────── STEP 3 ─────────────── -->
+<section class="panel hidden" id="step3">
+  <h2 id="runTitle">Çalışıyor…</h2>
+  <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+  <p class="stage" id="stageLabel">başlatılıyor</p>
+  <pre class="log" id="runLog"></pre>
+  <div id="runError" class="error hidden"></div>
+  <button class="btn btn-ghost hidden" id="backAfterError">← Parametrelere dön</button>
+</section>
+
+<!-- ─────────────── STEP 4 ─────────────── -->
+<section class="panel hidden" id="step4">
+  <div class="row between wrap">
+    <h2>Sonuçlar — <span id="resultGene"></span></h2>
+    <div class="row gap">
+      <a class="btn btn-ghost btn-sm" id="dlPrimers" download>primers.tsv</a>
+      <a class="btn btn-ghost btn-sm" id="dlAligned" download>aligned.fasta</a>
+      <a class="btn btn-ghost btn-sm" id="dlJson" download>results.json</a>
+      <button class="btn btn-ghost btn-sm" id="newRun">Yeni tasarım</button>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <!-- Alignment + conservation map -->
+  <div class="card viz-card">
+    <div class="row between wrap">
+      <h3>Hizalama ve korunmuşluk haritası</h3>
+      <div class="row gap small">
+        <span class="legend"><i class="sw sw-cons"></i> korunmuş blok</span>
+        <span class="legend"><i class="sw sw-var"></i> değişken</span>
+        <span class="legend"><i class="sw sw-match"></i> referansla aynı</span>
+        <span class="legend"><i class="sw sw-mm"></i> farklı</span>
+        <span class="legend"><i class="sw sw-gap"></i> gap</span>
+        <button class="btn btn-ghost btn-sm" id="zoomReset">Tamamı</button>
+      </div>
+    </div>
+    <p class="hint">Sürükleyerek yakınlaş, çift tıkla sıfırla. Seçili primer
+      çiftinin bağlanma yerleri ok olarak çizilir.</p>
+    <canvas id="alnCanvas" height="360"></canvas>
+    <div id="alnTooltip" class="tooltip hidden"></div>
+    <div class="ruler" id="alnRuler"></div>
+  </div>
+
+  <!-- Pair selector -->
+  <div class="card">
+    <h3>Primer çiftleri</h3>
+    <div class="pair-list" id="pairList"></div>
+  </div>
+
+  <!-- Amplicon schematic -->
+  <div class="card viz-card">
+    <h3>Amplikon şeması — neyin nereye bağlandığı</h3>
+    <div id="ampliconViz"></div>
+  </div>
+
+  <!-- Binding detail -->
+  <div class="grid grid-2">
+    <div class="card">
+      <h3>Bağlanma detayı (dizi dizi)</h3>
+      <p class="hint">Her dizide primerin oturduğu bölge; uyumsuz bazlar kırmızı,
+        3' uçtaki son 5 baz sarı çerçeveli — 3' uç uyumsuzluğu uzamayı bloklar.</p>
+      <div class="row gap small mb">
+        <label>Göster:
+          <select id="bindingRole">
+            <option value="forward">Forward</option>
+            <option value="reverse">Reverse</option>
+            <option value="probe">Probe</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="onlyMismatch"> yalnız uyumsuz olanlar</label>
+      </div>
+      <div id="bindingDetail" class="binding-detail"></div>
+    </div>
+
+    <div class="card">
+      <h3>Kapsama ısı haritası</h3>
+      <p class="hint">Satır = dizi, sütun = oligo. Renk = uyumsuz baz sayısı.
+        Çerçeveli hücre 3' uç uyumsuzluğu taşır.</p>
+      <div id="coverageHeatmap"></div>
+    </div>
+  </div>
+
+  <!-- Structures -->
+  <div class="card">
+    <h3>Dimer ve hairpin geometrisi</h3>
+    <p class="hint">Aşağıdaki diyagramlar <b>baz eşleşme geometrisidir</b>
+      (Watson–Crick taraması), termodinamik tahmin değildir. Termodinamik
+      değerler (Tm, hairpin/dimer °C) yalnızca Primer3'ten alınır ve tabloda verilir.</p>
+    <div id="structureViz" class="struct-grid"></div>
+  </div>
+
+  <!-- Metrics -->
+  <div class="card">
+    <h3>Metrikler</h3>
+    <div class="table-wrap"><table class="data-table" id="metricsTable"></table></div>
+  </div>
+
+  <!-- Record accounting -->
+  <div class="card">
+    <h3>Kayıt durumu</h3>
+    <p class="hint">Hangi kayıt hizalamaya girdi, hangisi neden dışlandı.
+      Korunmuşluk hesabından çıkarılan kayıtlar yine de her primere karşı
+      doğrulanır ve yukarıdaki kapsama tablosunda görünür.</p>
+    <div id="recordBox"></div>
+  </div>
+
+  <!-- Specificity -->
+  <div class="card">
+    <h3>Spesifiklik (yerel BLAST)</h3>
+    <div id="specificityBox"></div>
+  </div>
+
+  <!-- Methods -->
+  <div class="card">
+    <h3>Yöntem özeti</h3>
+    <pre class="methods" id="methodsBox"></pre>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <span>Araştırma amaçlıdır — tasarlanan primerler ıslak laboratuvarda doğrulanmadan tanısal amaçla kullanılmamalıdır.</span>
+</footer>
+
+<script src="/js/viz.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

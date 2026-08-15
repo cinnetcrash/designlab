@@ -1,0 +1,11 @@
+# Python packages (already present in the base conda env on this machine)
+fastapi>=0.115
+uvicorn>=0.30
+pydantic>=2.7
+biopython>=1.83
+python-multipart>=0.0.9
+
+# External binaries required on PATH (not pip-installable):
+#   mafft         >= 7.5    conda install -c bioconda mafft
+#   primer3_core  >= 2.6    apt install primer3  /  conda install -c bioconda primer3
+#   blastn, makeblastdb     conda install -c bioconda blast

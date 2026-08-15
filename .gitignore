@@ -1,0 +1,8 @@
+# Runtime output: job directories, run database, server logs
+data/
+
+# Python virtual environment (recreate with: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
