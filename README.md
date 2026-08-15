@@ -10,16 +10,55 @@ which oligo sits where, on which strand, and which sequence carries a mismatch.
 
 ## Install
 
-Two commands on a machine that already has Python 3.11+ and conda:
+### Ubuntu (tested on 24.04 LTS)
+
+Everything the app needs is in the standard Ubuntu archive — no PPA, no conda,
+no compiling:
+
+```bash
+sudo apt update
+sudo apt install -y git python3-venv python3-pip mafft primer3 ncbi-blast+
+
+git clone https://github.com/cinnetcrash/primer-designer.git
+cd primer-designer
+bash install.sh
+./run.sh                       # http://127.0.0.1:8090
+```
+
+Or let the installer pull the system packages itself — it prints the exact
+`apt-get` line before running it, and only asks for sudo when something is
+actually missing:
+
+```bash
+git clone https://github.com/cinnetcrash/primer-designer.git
+cd primer-designer && bash install.sh --with-apt && ./run.sh
+```
+
+What the apt packages provide, with the versions this was verified against on
+24.04:
+
+| Package | Provides | Version on 24.04 |
+|---|---|---|
+| `mafft` | `mafft` — multiple sequence alignment | 7.505-1 |
+| `primer3` | `primer3_core` and `/etc/primer3_config` | 2.6.1-4 |
+| `ncbi-blast+` | `blastn`, `makeblastdb` | 2.12.0+ds-4build2 |
+| `python3-venv` | the `venv` module `install.sh` needs | 3.12.3 |
+
+Ubuntu 24.04 ships Python 3.12, which the app runs on — the offline test suites
+and the server were verified on it. **22.04 ships Python 3.10**: the source
+parses cleanly under 3.10 and uses no 3.11-only stdlib call, but it has not been
+run there. On 22.04 either install a newer interpreter
+(`sudo add-apt-repository ppa:deadsnakes/ppa && sudo apt install python3.12-venv`,
+then `PYTHON=python3.12 bash install.sh`) or use the conda route below.
+
+Ubuntu's `ncbi-blast+` is 2.12 while bioconda ships 2.16. Both work here; 2.16
+is only worth chasing if you also use BLAST elsewhere and want one version.
+
+### Other systems
 
 ```bash
 git clone https://github.com/cinnetcrash/primer-designer.git
 cd primer-designer && bash install.sh --with-conda
-```
-
-Then start it:
-
-```bash
 ./run.sh                # http://127.0.0.1:8090
 PORT=9000 ./run.sh      # different port
 ```
@@ -27,14 +66,23 @@ PORT=9000 ./run.sh      # different port
 `install.sh` creates the project venv, installs the Python packages, checks the
 four external programs and prints exactly how to get any that are missing, then
 runs the offline tests so you know the install works before you open the
-browser. Drop `--with-conda` to only report on the missing tools instead of
-installing them.
+browser. With no flag it only reports on missing tools; `--with-apt` and
+`--with-conda` install them.
+
+### Keeping it running (optional)
+
+For a lab machine that should serve the app after a reboot, `deploy/primer-designer.service`
+is a systemd user unit with the install commands in its header. It binds to
+127.0.0.1 deliberately: **the app has no authentication**, so it must not be
+exposed on a network without a reverse proxy that provides one. `HOST=0.0.0.0 ./run.sh`
+does work, but that is a decision about who can reach your NCBI quota and your
+run history, not just a convenience flag.
 
 ### What it needs
 
 | | |
 |---|---|
-| Python | 3.11 or newer |
+| Python | 3.11 and 3.12 verified; 3.10 parses but is untested |
 | Python packages | fastapi, uvicorn, biopython, pydantic — installed into `.venv/` by the installer |
 | External programs | `mafft`, `primer3_core`, `blastn`, `makeblastdb` on PATH |
 | Network | NCBI access (BLAST and Entrez); everything else runs locally |
@@ -82,6 +130,9 @@ export PRIMER_DATA_DIR=/data/pd    # where runs and the database are kept
 | `Router.__init__() got an unexpected keyword argument` on startup | The app is running on a Python that has an incompatible starlette. Use `./run.sh`, which picks `.venv/bin/python` |
 | Search hangs for minutes | A sequence search runs at NCBI and typically takes 30-90 s. The header badge shows what is running; the gene-name search answers in seconds |
 | History is empty after moving the machine | The database is an index — `POST /api/history/rebuild` re-reads `data/jobs/` |
+| `ensurepip is not available` / venv cannot be created (Ubuntu) | `sudo apt install python3-venv`. Ubuntu ships `python3` without the venv module |
+| `externally-managed-environment` from pip (Ubuntu 23.04+) | You are pip-installing into the system Python. Use `./run.sh` / `install.sh`, which install into `.venv/` |
+| `primer3_core: cannot find thermodynamic parameters` | The `primer3` apt package puts them in `/etc/primer3_config`, which the app finds automatically. On a manual build, set `PRIMER3_CONFIG=/path/to/primer3_config` |
 
 ## Using it
 

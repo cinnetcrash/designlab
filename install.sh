@@ -5,11 +5,14 @@
 #   bash install.sh                install Python deps, then report on the
 #                                  external tools and how to get any that are
 #                                  missing
-#   bash install.sh --with-conda   also install the missing external tools into
-#                                  a conda environment (needs conda on PATH)
+#   bash install.sh --with-apt     also install the missing external tools with
+#                                  apt (Debian/Ubuntu; asks for sudo)
+#   bash install.sh --with-conda   same, but into a conda environment
 #
-# Nothing here touches an existing environment: the Python packages go into a
+# Nothing here touches an existing Python environment: the packages go into a
 # project-local .venv/, and --with-conda creates its own named environment.
+# --with-apt does install system packages, which is why it is opt-in and prints
+# the exact command before running it.
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
@@ -17,7 +20,15 @@ cd "$(dirname "$0")"
 PROJECT_DIR="$PWD"
 CONDA_ENV_NAME="${CONDA_ENV_NAME:-primer-designer}"
 WITH_CONDA=0
-[[ "${1:-}" == "--with-conda" ]] && WITH_CONDA=1
+WITH_APT=0
+for arg in "$@"; do
+  case "$arg" in
+    --with-conda) WITH_CONDA=1 ;;
+    --with-apt)   WITH_APT=1 ;;
+    -h|--help)    sed -n '2,16p' "$0"; exit 0 ;;
+    *) echo "unknown option: $arg (try --help)"; exit 2 ;;
+  esac
+done
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
@@ -82,9 +93,34 @@ check_tool primer3_core "Primer3 (primer design)"
 check_tool blastn       "BLAST+ blastn (homology search)"
 check_tool makeblastdb  "BLAST+ makeblastdb"
 
+APT_PACKAGES=""
+for bin in "${MISSING[@]:-}"; do
+  case "$bin" in
+    mafft)                    APT_PACKAGES="$APT_PACKAGES mafft" ;;
+    primer3_core)             APT_PACKAGES="$APT_PACKAGES primer3" ;;
+    blastn|makeblastdb)       APT_PACKAGES="$APT_PACKAGES ncbi-blast+" ;;
+  esac
+done
+# de-duplicate (blastn and makeblastdb both come from ncbi-blast+)
+APT_PACKAGES=$(printf '%s\n' $APT_PACKAGES | sort -u | tr '\n' ' ')
+
 if ((${#MISSING[@]} > 0)); then
   echo
-  if ((WITH_CONDA)) && command -v conda >/dev/null 2>&1; then
+  if ((WITH_APT)) && command -v apt-get >/dev/null 2>&1; then
+    echo "  running: sudo apt-get install -y $APT_PACKAGES"
+    if sudo apt-get update -qq && sudo apt-get install -y $APT_PACKAGES; then
+      ok "installed: $APT_PACKAGES"
+      MISSING=()
+      for tool in mafft primer3_core blastn makeblastdb; do
+        command -v "$tool" >/dev/null 2>&1 || MISSING+=("$tool")
+      done
+      ((${#MISSING[@]} == 0)) && ok "all external programs now on PATH"
+    else
+      fail "apt install failed — see the output above"
+    fi
+  elif ((WITH_APT)); then
+    fail "--with-apt needs apt-get; this does not look like a Debian/Ubuntu system"
+  elif ((WITH_CONDA)) && command -v conda >/dev/null 2>&1; then
     echo "  installing ${MISSING[*]} into conda env '$CONDA_ENV_NAME' …"
     if conda create -y -n "$CONDA_ENV_NAME" -c conda-forge -c bioconda \
          mafft primer3 blast >/dev/null 2>&1; then
@@ -95,10 +131,10 @@ if ((${#MISSING[@]} > 0)); then
     fi
   else
     warn "install the missing tools with one of:"
+    echo "      sudo apt install$APT_PACKAGES                    # Debian/Ubuntu"
     echo "      conda install -c conda-forge -c bioconda mafft primer3 blast"
-    echo "      sudo apt install mafft primer3 ncbi-blast+       # Debian/Ubuntu"
     echo "      brew install mafft primer3 blast                 # macOS"
-    ((WITH_CONDA)) || echo "      (or re-run: bash install.sh --with-conda)"
+    echo "      (or re-run: bash install.sh --with-apt   /   --with-conda)"
   fi
 fi
 echo

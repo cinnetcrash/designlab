@@ -1,0 +1,41 @@
+# Run Primer Designer as a user service on Ubuntu, so it survives logout and
+# comes back after a reboot. This is optional — ./run.sh in a terminal is fine
+# for personal use.
+#
+#   mkdir -p ~/.config/systemd/user
+#   sed "s|%PROJECT%|$HOME/primer-designer|" deploy/primer-designer.service \
+#       > ~/.config/systemd/user/primer-designer.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now primer-designer
+#   loginctl enable-linger "$USER"      # keep it running when logged out
+#
+#   systemctl --user status primer-designer
+#   journalctl --user -u primer-designer -f
+#
+# The service binds to 127.0.0.1 on purpose: the app has no authentication, so
+# it must not be reachable from the network without a reverse proxy in front of
+# it that provides one.
+
+[Unit]
+Description=Primer Designer (conservation-aware PCR/qPCR primer design)
+Documentation=https://github.com/cinnetcrash/primer-designer
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%PROJECT%
+Environment=PORT=8090
+Environment=HOST=127.0.0.1
+# Optional: raises the NCBI Entrez rate limit from 3 to 10 requests/second.
+# Environment=NCBI_API_KEY=...
+# Environment=NCBI_EMAIL=you@example.com
+ExecStart=%PROJECT%/run.sh
+Restart=on-failure
+RestartSec=5
+
+# The app only ever writes under its own data/ directory.
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target
