@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -47,6 +48,8 @@ def create_job(kind: str, meta: dict[str, Any] | None = None) -> str:
             "result": None,
             "error": None,
             "workdir": str(workdir),
+            "tool": None,          # external program running right now
+            "tool_since": None,    # epoch seconds it started
         }
     _persist(job_id)
     return job_id
@@ -88,15 +91,34 @@ def get_job_meta(job_id: str, log_from: int = 0) -> dict[str, Any] | None:
             "log": list(job["log"][log_from:]),
             "log_total": len(job["log"]),
             "has_result": job["result"] is not None,
+            "tool": job.get("tool"),
+            "tool_elapsed_s": _tool_elapsed(job),
         }
+
+
+def _tool_elapsed(job: dict[str, Any]) -> float | None:
+    since = job.get("tool_since")
+    if not since or job.get("status") not in ("running", "queued"):
+        return None
+    try:
+        return round(time.time() - float(since), 1)
+    except (TypeError, ValueError):
+        return None
 
 
 def list_jobs(limit: int = 50) -> list[dict[str, Any]]:
     with _LOCK:
         jobs = sorted(_JOBS.values(), key=lambda j: j["created"], reverse=True)
-        return [{k: j[k] for k in
-                 ("id", "kind", "status", "stage", "progress", "created", "meta")}
+        return [{**{k: j[k] for k in
+                    ("id", "kind", "status", "stage", "progress", "created", "meta")},
+                 "tool": j.get("tool"), "tool_elapsed_s": _tool_elapsed(j)}
                 for j in jobs[:limit]]
+
+
+def active_jobs() -> list[dict[str, Any]]:
+    """Jobs running right now, with the external program each is executing."""
+    return [j for j in list_jobs(limit=100)
+            if j["status"] in ("running", "queued")]
 
 
 def update(job_id: str, **fields: Any) -> None:
@@ -109,8 +131,24 @@ def update(job_id: str, **fields: Any) -> None:
     _persist(job_id)
 
 
+def set_tool(job_id: str, tool: str | None) -> None:
+    """Record which external program is running right now (None when idle).
+
+    This is what the UI shows live, so it is set immediately around each
+    subprocess rather than being inferred from the stage afterwards.
+    """
+    with _LOCK:
+        job = _JOBS.get(job_id)
+        if not job:
+            return
+        job["tool"] = tool
+        job["tool_since"] = time.time() if tool else None
+        job["updated"] = _now()
+    _persist(job_id)
+
+
 def log(job_id: str, message: str, progress: int | None = None,
-        stage: str | None = None) -> None:
+        stage: str | None = None, tool: str | None = None) -> None:
     entry = {"time": _now(), "message": message}
     with _LOCK:
         job = _JOBS.get(job_id)
@@ -121,6 +159,9 @@ def log(job_id: str, message: str, progress: int | None = None,
             job["progress"] = progress
         if stage is not None:
             job["stage"] = stage
+        if tool is not None:
+            job["tool"] = tool
+            job["tool_since"] = time.time()
         job["updated"] = _now()
     logger.info("[%s] %s", job_id, message)
     _persist(job_id)

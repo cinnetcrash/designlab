@@ -3,23 +3,41 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class SearchRequest(BaseModel):
-    """Step 1 — find candidate homologues on NCBI."""
+    """Step 1 — find candidate homologues on NCBI.
+
+    For a gene-name search the caller supplies plain words — `gene` ("invA") and
+    optionally `organism` ("Salmonella enterica") — and the backend assembles
+    the Entrez query. Nobody should have to know Entrez field tags to run a
+    search. `raw_query` is the escape hatch for people who do.
+    """
 
     input_type: Literal["sequence", "query"] = "sequence"
-    # input_type == "sequence": raw or FASTA nucleotide sequence
-    # input_type == "query":    Entrez query, e.g. 'rpoB[Gene] AND Salmonella[Organism]'
-    text: str = Field(..., min_length=3)
+    # input_type == "sequence": raw or FASTA nucleotide sequence in `text`
+    # input_type == "query":    plain gene/organism words, or `raw_query`
+    text: str = ""
+    gene: str = ""
+    raw_query: str = ""          # used verbatim when set; skips query building
     database: Literal["nt", "core_nt", "refseq_rna"] = "core_nt"
     max_hits: int = Field(50, ge=1, le=200)
     min_identity: float = Field(80.0, ge=50.0, le=100.0)
     min_coverage: float = Field(60.0, ge=10.0, le=100.0)
     min_length: int = Field(200, ge=50)
     max_length: int = Field(20_000, ge=100)
-    organism: str = ""          # optional Entrez organism filter for query mode
+    organism: str = ""          # optional; plain name, e.g. "Salmonella enterica"
+
+    @model_validator(mode="after")
+    def _needs_something_to_search(self) -> "SearchRequest":
+        if self.input_type == "sequence":
+            if len(self.text.strip()) < 3:
+                raise ValueError("Paste a nucleotide sequence to search with.")
+        elif not (self.gene.strip() or self.raw_query.strip()
+                  or self.text.strip()):
+            raise ValueError("Enter a gene name (or an organism with a raw query).")
+        return self
 
 
 class Primer3Settings(BaseModel):

@@ -180,17 +180,42 @@ def _blast_parse(xml: str, min_identity: float, min_coverage: float,
 
 # ─── Gene-name input → Entrez search ─────────────────────────────────────────
 
-def entrez_search(term: str, *, organism: str, max_hits: int,
-                  min_length: int, max_length: int,
-                  progress: Progress = lambda _m: None) -> list[dict[str, Any]]:
-    """Search the nucleotide database by text and summarise the records."""
-    query = term.strip()
-    if organism.strip():
-        query += f' AND "{organism.strip()}"[Organism]'
-    query += f" AND {min_length}:{max_length}[SLEN]"
-    # WGS master records dominate gene-name searches and carry no sequence.
-    query += ' NOT "wgs master"[Properties]'
+def build_entrez_query(gene: str = "", organism: str = "",
+                       min_length: int = 200, max_length: int = 20_000,
+                       raw_query: str = "") -> str:
+    """Assemble an Entrez query from plain words.
 
+    Users should not have to know Entrez field tags. A gene name is matched
+    against both the gene field and the record title, because plenty of records
+    that contain a gene are not annotated with it as a gene symbol; the length
+    window and the WGS-master exclusion are always applied, since master records
+    carry no sequence and would fail at download.
+    """
+    if raw_query.strip():
+        base = raw_query.strip()
+    else:
+        parts = []
+        gene = gene.strip()
+        if gene:
+            escaped = gene.replace('"', "")
+            parts.append(f'("{escaped}"[Gene] OR "{escaped}"[Title])')
+        if organism.strip():
+            parts.append(f'"{organism.strip()}"[Organism]')
+        base = " AND ".join(parts)
+
+    if not base:
+        raise ValueError("Nothing to search for: give a gene name or a raw query.")
+
+    filters = f"{min_length}:{max_length}[SLEN]"
+    query = f"{base} AND {filters}"
+    if "wgs master" not in query.lower():
+        query += ' NOT "wgs master"[Properties]'
+    return query
+
+
+def entrez_search(query: str, *, max_hits: int,
+                  progress: Progress = lambda _m: None) -> list[dict[str, Any]]:
+    """Search the nucleotide database with a ready-made query."""
     progress(f"Entrez esearch: {query}")
     handle = Entrez.esearch(db="nucleotide", term=query, retmax=max_hits,
                             sort="relevance")

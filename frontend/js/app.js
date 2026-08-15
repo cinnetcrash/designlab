@@ -21,6 +21,9 @@ const state = {
 document.addEventListener('DOMContentLoaded', () => {
   wireUp();
   health();
+  updateQueryPreview();
+  pollActive();
+  setInterval(pollActive, 4000);
   const saved = localStorage.getItem('pd-theme');
   if (saved) document.documentElement.setAttribute('data-theme', saved);
 });
@@ -68,6 +71,21 @@ function wireUp() {
     const bp = cleanSeq($('seqInput').value).length;
     $('seqStats').textContent = bp.toLocaleString() + ' bp';
   });
+
+  // Live preview of the query the backend will build from the plain words.
+  let previewTimer = null;
+  const schedulePreview = () => {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(updateQueryPreview, 250);
+  };
+  ['geneInput', 'organismInput', 'queryInput', 'minLength', 'maxLength']
+    .forEach(id => $(id).addEventListener('input', schedulePreview));
+  $('rawToggle').onchange = () => {
+    const raw = $('rawToggle').checked;
+    $('queryInput').classList.toggle('hidden', !raw);
+    $('geneInput').disabled = raw;
+    updateQueryPreview();
+  };
 
   $('loadExample').onclick = () => {
     $('seqInput').value = EXAMPLE;
@@ -237,12 +255,83 @@ async function openPastRun(jobId) {
   showStep(4);
 }
 
+async function updateQueryPreview() {
+  const raw = $('rawToggle').checked;
+  const params = new URLSearchParams({
+    gene: raw ? '' : $('geneInput').value,
+    organism: $('organismInput').value,
+    min_length: $('minLength').value || 200,
+    max_length: $('maxLength').value || 20000,
+    raw_query: raw ? $('queryInput').value : '',
+  });
+  try {
+    const r = await api('/api/entrez-query?' + params.toString());
+    $('queryPreview').textContent = r.query || (r.note || '—');
+  } catch {
+    $('queryPreview').textContent = '—';
+  }
+}
+
+/* ─── live "what is running now" ────────────────────────────────────── */
+
+const PIPELINE_STEPS = [
+  { stage: 'search', label: 'NCBI arama' },
+  { stage: 'download', label: 'İndirme' },
+  { stage: 'trim', label: 'Homoloji kırpma' },
+  { stage: 'align', label: 'Hizalama' },
+  { stage: 'conservation', label: 'Korunmuşluk' },
+  { stage: 'primer3', label: 'Primer3' },
+  { stage: 'validate', label: 'Doğrulama' },
+];
+
+function renderPipelineSteps(currentStage) {
+  const order = PIPELINE_STEPS.map(s => s.stage);
+  const at = order.indexOf(currentStage);
+  $('pipelineSteps').innerHTML = PIPELINE_STEPS.map((s, i) => {
+    const cls = at < 0 ? '' : (i < at ? 'done' : (i === at ? 'active' : ''));
+    return `<span class="pstep ${cls}">${esc(s.label)}</span>`;
+  }).join('');
+}
+
+function showRunning(job) {
+  const running = job.status === 'running' || job.status === 'queued';
+  $('runSpinner').classList.toggle('hidden', !running);
+  $('nowTool').textContent = running
+    ? (job.tool || 'hazırlanıyor')
+    : (job.status === 'done' ? 'bitti' : 'durdu');
+  $('stageLabel').textContent = job.stage || '—';
+  $('toolElapsed').textContent =
+    job.tool_elapsed_s != null ? job.tool_elapsed_s.toFixed(0) + ' s' : '—';
+  $('nowRunning').classList.toggle('idle', !running);
+  renderPipelineSteps(job.stage);
+}
+
+/* Header badge: shows anything running, even while looking at the history. */
+async function pollActive() {
+  try {
+    const a = await api('/api/jobs/active');
+    const badge = $('activeBadge');
+    if (!a.count) {
+      badge.classList.add('hidden');
+    } else {
+      badge.classList.remove('hidden');
+      const tools = a.tools.length ? a.tools.join(', ') : 'hazırlanıyor';
+      badge.textContent = `${a.count} iş çalışıyor · ${tools}`;
+      badge.title = a.jobs
+        .map(j => `${j.kind} ${j.id}: ${j.stage} — ${j.tool || '—'}`).join('\n');
+    }
+  } catch { /* backend down; the health pill already says so */ }
+}
+
 /* ─── step 1: search ────────────────────────────────────────────────── */
 
 async function startSearch() {
+  const raw = $('rawToggle').checked;
   const body = {
     input_type: state.inputType,
-    text: state.inputType === 'sequence' ? $('seqInput').value : $('queryInput').value,
+    text: state.inputType === 'sequence' ? $('seqInput').value : '',
+    gene: raw ? '' : $('geneInput').value,
+    raw_query: raw ? $('queryInput').value : '',
     database: $('database').value,
     max_hits: int($('maxHits'), 50),
     min_identity: num($('minIdentity'), 80),
@@ -251,8 +340,12 @@ async function startSearch() {
     max_length: int($('maxLength'), 20000),
     organism: $('organismInput').value,
   };
-  if (!body.text || body.text.trim().length < 3) {
-    alert('Önce bir gen dizisi ya da gen adı gir.');
+  const given = state.inputType === 'sequence'
+    ? body.text : (body.gene || body.raw_query || body.organism);
+  if (!given || given.trim().length < 3) {
+    alert(state.inputType === 'sequence'
+      ? 'Önce bir gen dizisi yapıştır.'
+      : 'Önce bir gen adı yaz (ör. invA).');
     return;
   }
 
@@ -279,10 +372,11 @@ function renderHits() {
     $('hitSummary').textContent = '0 kayıt';
     return;
   }
-  $('hitSummary').textContent =
+  $('hitSummary').innerHTML =
     `${r.n_hits} aday kayıt · kaynak: ${r.input_type === 'sequence'
-      ? `BLAST (${r.database}), identity ve coverage eşikleri uygulandı`
-      : 'Entrez nucleotide (identity/coverage bilgisi yok)'} · ${r.elapsed_s}s`;
+      ? `BLAST (${esc(r.database)}), identity ve coverage eşikleri uygulandı`
+      : 'Entrez nucleotide (identity/coverage bilgisi yok)'} · ${r.elapsed_s}s`
+    + (r.entrez_query ? `<br>çalıştırılan sorgu: <code>${esc(r.entrez_query)}</code>` : '');
 
   tbody.innerHTML = r.hits.map((h, i) => `
     <tr>
@@ -391,7 +485,7 @@ async function pollJob(jobId) {
       state.logSeen = job.log_total;
     }
     $('progressBar').style.width = job.progress + '%';
-    $('stageLabel').textContent = job.stage;
+    showRunning(job);
     if (job.status === 'done' || job.status === 'error') return job;
     await sleep(1200);
   }

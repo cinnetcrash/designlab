@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 import config
 import db
 import jobs
+import ncbi
 import pipeline
 import validation
 from models import DesignRequest, SearchRequest, ValidatePrimerRequest
@@ -86,6 +87,23 @@ def health() -> dict[str, Any]:
 
 # ─── Step 1: search NCBI ─────────────────────────────────────────────────────
 
+@app.get("/api/entrez-query")
+def entrez_query_preview(gene: str = "", organism: str = "",
+                         min_length: int = 200, max_length: int = 20_000,
+                         raw_query: str = "") -> dict[str, Any]:
+    """Show the Entrez query the plain-word inputs will produce.
+
+    The UI displays this live, so the user can see exactly what gets searched
+    without having to write Entrez field tags themselves.
+    """
+    try:
+        return {"query": ncbi.build_entrez_query(
+            gene=gene, organism=organism, min_length=min_length,
+            max_length=max_length, raw_query=raw_query)}
+    except ValueError as exc:
+        return {"query": "", "note": str(exc)}
+
+
 @app.post("/api/search")
 def start_search(req: SearchRequest) -> dict[str, Any]:
     if req.input_type == "sequence" and len(clean_sequence(req.text)) < 50:
@@ -146,6 +164,17 @@ def job_result(job_id: str) -> JSONResponse:
 @app.get("/api/jobs")
 def job_list() -> dict[str, Any]:
     return {"jobs": jobs.list_jobs()}
+
+
+@app.get("/api/jobs/active")
+def jobs_active() -> dict[str, Any]:
+    """What is running right now, and which external program each job is in."""
+    active = jobs.active_jobs()
+    return {
+        "count": len(active),
+        "jobs": active,
+        "tools": sorted({j["tool"] for j in active if j.get("tool")}),
+    }
 
 
 # ─── Run history ─────────────────────────────────────────────────────────────

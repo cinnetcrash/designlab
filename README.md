@@ -8,27 +8,116 @@ lets Primer3 place primers **only inside those blocks**. Every oligo is then
 checked base by base against every downloaded sequence, and the result is drawn:
 which oligo sits where, on which strand, and which sequence carries a mismatch.
 
-## Running
+## Install
+
+Two commands on a machine that already has Python 3.11+ and conda:
+
+```bash
+git clone https://github.com/cinnetcrash/primer-designer.git
+cd primer-designer && bash install.sh --with-conda
+```
+
+Then start it:
 
 ```bash
 ./run.sh                # http://127.0.0.1:8090
 PORT=9000 ./run.sh      # different port
 ```
 
-`run.sh` uses the project venv at `.venv/` (created once with
-`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`). The base
-conda environment on this machine ships a starlette version FastAPI cannot use,
-which is why the app has its own venv rather than running on the base env.
+`install.sh` creates the project venv, installs the Python packages, checks the
+four external programs and prints exactly how to get any that are missing, then
+runs the offline tests so you know the install works before you open the
+browser. Drop `--with-conda` to only report on the missing tools instead of
+installing them.
 
-External binaries must be on PATH: `mafft`, `primer3_core`, `blastn`,
-`makeblastdb`. `/api/health` reports what is missing and which versions are in
-use; the same versions are written into the methods block of every result.
+### What it needs
+
+| | |
+|---|---|
+| Python | 3.11 or newer |
+| Python packages | fastapi, uvicorn, biopython, pydantic — installed into `.venv/` by the installer |
+| External programs | `mafft`, `primer3_core`, `blastn`, `makeblastdb` on PATH |
+| Network | NCBI access (BLAST and Entrez); everything else runs locally |
+| Disk | ~160 MB for `.venv/`, plus a few MB per run under `data/` |
+
+Installing the external programs by hand, if you prefer:
+
+```bash
+conda install -c conda-forge -c bioconda mafft primer3 blast   # any OS
+sudo apt install mafft primer3 ncbi-blast+                     # Debian/Ubuntu
+brew install mafft primer3 blast                               # macOS
+```
+
+`/api/health` reports which programs are missing and which versions are in use;
+the same versions are written into the methods block of every result. The
+header shows a green badge when all four are present.
+
+### Manual install
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+./run.sh
+```
+
+The app deliberately uses a project-local `.venv/` rather than whatever Python
+is active: conda base environments often carry a starlette version FastAPI
+cannot use, and installing into the base environment could break other tools on
+the machine.
+
+### Optional
+
+```bash
+export NCBI_API_KEY=<key>          # ncbi.nlm.nih.gov/account/settings — lifts
+export NCBI_EMAIL=you@example.com  # the Entrez rate limit from 3 to 10 req/s
+export PORT=9000                   # default 8090
+export PRIMER_DATA_DIR=/data/pd    # where runs and the database are kept
+```
+
+### Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| Header badge says a tool is missing | That binary is not on PATH. If you installed with `--with-conda`, run `conda activate primer-designer` first, then `./run.sh` |
+| `Router.__init__() got an unexpected keyword argument` on startup | The app is running on a Python that has an incompatible starlette. Use `./run.sh`, which picks `.venv/bin/python` |
+| Search hangs for minutes | A sequence search runs at NCBI and typically takes 30-90 s. The header badge shows what is running; the gene-name search answers in seconds |
+| History is empty after moving the machine | The database is an index — `POST /api/history/rebuild` re-reads `data/jobs/` |
+
+## Using it
+
+**Two ways to find sequences.** Paste a gene sequence and it is BLASTed at NCBI,
+which gives identity, coverage and — importantly — the coordinates of the hit,
+so only the matching locus is downloaded rather than a whole chromosome. Or type
+a gene name: `invA`, optionally with an organism. No Entrez field tags are
+needed; the backend assembles the query and the page shows it as you type, so
+what actually gets searched is never hidden:
+
+```
+("invA"[Gene] OR "invA"[Title]) AND "Salmonella enterica"[Organism]
+  AND 1500:5000[SLEN] NOT "wgs master"[Properties]
+```
+
+The gene name is matched against both the gene field and the record title, since
+plenty of records carrying a gene are not annotated with it as a gene symbol.
+The length window and the WGS-master exclusion are always applied — master
+records describe a sequencing project and contain no sequence, so they would
+fail at download. Tick *"Entrez sorgusunu kendim yazacağım"* to write the query
+by hand instead.
+
+**You choose how many records to pull.** The search returns candidates in a
+table; pick them individually or take the best N.
+
+**You can see what is running.** While a job runs, the page names the external
+program currently executing — NCBI Entrez, efetch, blastn, MAFFT, Primer3 — with
+the seconds it has been in that step and the pipeline stages ticked off as they
+complete. The header badge shows the same thing from anywhere in the app, so a
+long BLAST is never a silent wait. `GET /api/jobs/active` returns it as JSON.
 
 ## Pipeline
 
 | Step | Tool | What happens |
 |---|---|---|
-| 1. Homologue search | `blastn -remote` (sequence input) or Entrez esearch (gene-name input) | Candidate accessions with identity / coverage / E-value. WGS master records are filtered out — they carry no sequence |
+| 1. Homologue search | NCBI BLAST URL API (sequence input) or Entrez esearch (gene-name input) | Candidate accessions with identity / coverage / E-value. WGS master records are filtered out — they carry no sequence. `blastn -remote` is deliberately not used: it submits the job but never returns a result on this host, while the URL API answers the same query in about 30 s |
 | 2. Download | Entrez efetch | Only the aligned locus ±200 bp is pulled when BLAST supplied coordinates, so a hit on a whole chromosome does not drag in megabases |
 | 3. Homology trimming | `blastn` (local) | Each record is cut back to the region matching the anchor. Without this, whole-contig records drag unrelated flanks into the alignment and the conserved blocks break into ~9 bp fragments |
 | 4. Alignment | MAFFT `--auto --adjustdirection` | Direction adjustment is required: NCBI contigs carry the gene on either strand, and a plus-strand copy aligned against a minus-strand one yields no conserved columns at all |
@@ -134,6 +223,8 @@ deleted afterwards:
 | `GET /api/job/{id}/result` | Full result document |
 | `GET /api/job/{id}/file/{name}` | Download a run artefact |
 | `POST /api/validate-oligo` | Check a hand-written oligo against a finished job |
+| `GET /api/entrez-query` | Preview the query plain words will produce |
+| `GET /api/jobs/active` | What is running now and in which external program |
 | `GET /api/history` | Past runs; `q` matches gene, accession or oligo sequence |
 | `GET /api/history/{id}` | One run with its oligos and the records it used |
 | `DELETE /api/history/{id}` | Drop a run from the index (files stay on disk) |
@@ -151,14 +242,23 @@ deleted afterwards:
 
 ```bash
 python3 tests/test_core_offline.py     # no network; runs real MAFFT and Primer3
+python3 tests/test_entrez_query.py     # Entrez query builder, no network
 python3 tests/test_db.py               # run database, in a temporary data dir
 node    tests/test_viz_headless.js     # renders the newest job result in a stubbed DOM
 ```
+
+`install.sh` runs the offline ones for you at the end of the install.
 
 `test_core_offline.py` checks that mutated windows never end up inside a
 conserved block, that Primer3 coordinates match the reference sequence, that
 reverse-primer coordinates reverse-complement correctly, and that a planted
 substitution is reported at the right offset from the 3' end.
+
+`test_entrez_query.py` checks that plain words become a valid query, that a raw
+query overrides them but still gets the length and master-record filters, that
+the master filter is never doubled, that a quote in a gene name cannot unbalance
+the query, and that an empty request is refused rather than searching for
+everything.
 
 `test_db.py` checks the run index round-trips a design, finds a run from one of
 its oligo sequences, does not duplicate rows when the same run is indexed twice,

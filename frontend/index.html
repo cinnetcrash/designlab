@@ -18,6 +18,7 @@
     </div>
   </div>
   <div class="topbar-right">
+    <span id="activeBadge" class="pill pill-run hidden"></span>
     <span id="health" class="pill pill-muted">araçlar kontrol ediliyor…</span>
     <button id="historyBtn" class="btn btn-ghost btn-sm">Geçmiş</button>
     <button id="themeToggle" class="btn btn-ghost" title="Tema">◐</button>
@@ -96,10 +97,37 @@
       </div>
 
       <div id="queryInputWrap" class="hidden">
-        <label class="field-label" for="queryInput">Entrez sorgusu</label>
-        <input id="queryInput" type="text" placeholder="rpoB[Gene] AND Salmonella[Organism]">
-        <label class="field-label" for="organismInput">Organizma filtresi (opsiyonel)</label>
-        <input id="organismInput" type="text" placeholder="Salmonella enterica">
+        <label class="field-label" for="geneInput">
+          Gen adı <span class="hint">sadece adını yaz — sorguyu program kurar</span>
+        </label>
+        <input id="geneInput" type="text" placeholder="invA" list="geneExamples">
+        <datalist id="geneExamples">
+          <option value="invA"><option value="rpoB"><option value="gyrB">
+          <option value="16S ribosomal RNA"><option value="ompA"><option value="fliC">
+        </datalist>
+
+        <label class="field-label" for="organismInput">
+          Organizma <span class="hint">opsiyonel</span>
+        </label>
+        <input id="organismInput" type="text" placeholder="Salmonella enterica"
+               list="organismExamples">
+        <datalist id="organismExamples">
+          <option value="Salmonella enterica"><option value="Escherichia coli">
+          <option value="Klebsiella pneumoniae"><option value="Staphylococcus aureus">
+          <option value="Pseudomonas aeruginosa"><option value="Acinetobacter baumannii">
+        </datalist>
+
+        <div class="query-preview">
+          <span class="hint">NCBI'ya gidecek sorgu:</span>
+          <code id="queryPreview">—</code>
+        </div>
+
+        <label class="checkline">
+          <input type="checkbox" id="rawToggle">
+          Entrez sorgusunu kendim yazacağım
+        </label>
+        <input id="queryInput" type="text" class="hidden"
+               placeholder='invA[Gene] AND "Salmonella enterica"[Organism]'>
       </div>
     </div>
 
@@ -295,8 +323,18 @@
 <!-- ─────────────── STEP 3 ─────────────── -->
 <section class="panel hidden" id="step3">
   <h2 id="runTitle">Çalışıyor…</h2>
+
+  <div class="now-running" id="nowRunning">
+    <span class="spinner" id="runSpinner"></span>
+    <div class="nr-text">
+      <div class="nr-tool" id="nowTool">başlatılıyor</div>
+      <div class="nr-sub"><span id="stageLabel">—</span> · <span id="toolElapsed">0 s</span></div>
+    </div>
+  </div>
+
+  <div class="pipeline-steps" id="pipelineSteps"></div>
+
   <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
-  <p class="stage" id="stageLabel">başlatılıyor</p>
   <pre class="log" id="runLog"></pre>
   <div id="runError" class="error hidden"></div>
   <button class="btn btn-ghost hidden" id="backAfterError">← Parametrelere dön</button>

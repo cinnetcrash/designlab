@@ -312,3 +312,44 @@ footer { text-align: center; color: var(--text-dim); font-size: 12px;
 h4.sub { font-size: 12.5px; margin: 16px 0 8px; color: var(--text-dim);
          text-transform: uppercase; letter-spacing: .04em; }
 #historyTable td .btn { white-space: nowrap; }
+
+/* ─── live run status ────────────────────────────────────── */
+.now-running {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--accent-soft); border: 1px solid var(--accent);
+  border-radius: var(--radius); padding: 12px 16px; margin-bottom: 12px;
+}
+.now-running.idle { background: var(--surface-2); border-color: var(--border); }
+.nr-tool { font-size: 15px; font-weight: 650; letter-spacing: -.2px; }
+.nr-sub { font-size: 12px; color: var(--text-dim); font-family: var(--mono); }
+.spinner {
+  width: 18px; height: 18px; flex: none; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.pipeline-steps { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.pstep {
+  font-size: 11.5px; padding: 4px 10px; border-radius: 999px;
+  background: var(--surface-2); color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+.pstep.done { background: var(--conserved-soft); color: var(--conserved);
+              border-color: var(--conserved); }
+.pstep.active { background: var(--accent); color: #fff; border-color: var(--accent);
+                font-weight: 600; }
+
+.pill-run { background: var(--accent-soft); color: var(--accent);
+            border: 1px solid var(--accent); max-width: 340px; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap; }
+
+/* ─── entrez query builder ───────────────────────────────── */
+.query-preview {
+  margin-top: 12px; padding: 9px 11px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.query-preview code { display: block; margin-top: 4px; background: none;
+                      padding: 0; font-size: 11.5px; word-break: break-word; }
+.checkline { display: flex; align-items: center; gap: 7px; margin: 12px 0 8px;
+             font-size: 13px; color: var(--text-dim); cursor: pointer; }

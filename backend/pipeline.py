@@ -54,19 +54,25 @@ def _run_search(job_id: str, req: SearchRequest) -> dict[str, Any]:
                 f"Query sequence is {len(query):,} bp; the limit is "
                 f"{config.MAX_QUERY_BP:,} bp. Paste a single gene, not a genome."
             )
-        jobs.log(job_id, f"Query sequence: {len(query):,} bp", progress=10)
+        jobs.log(job_id, f"Query sequence: {len(query):,} bp", progress=10,
+                 tool="NCBI BLAST (remote)")
         hits = ncbi.blast_search(
             query, database=req.database, max_hits=req.max_hits,
             min_identity=req.min_identity, min_coverage=req.min_coverage,
             progress=progress,
         )
         query_seq = query
+        entrez_query = ""
     else:
-        hits = ncbi.entrez_search(
-            req.text, organism=req.organism, max_hits=req.max_hits,
+        entrez_query = ncbi.build_entrez_query(
+            gene=req.gene or req.text, organism=req.organism,
             min_length=req.min_length, max_length=req.max_length,
-            progress=progress,
+            raw_query=req.raw_query,
         )
+        jobs.log(job_id, f"Entrez query built: {entrez_query}", progress=10,
+                 tool="NCBI Entrez")
+        hits = ncbi.entrez_search(entrez_query, max_hits=req.max_hits,
+                                  progress=progress)
         query_seq = ""
 
     jobs.log(job_id, f"Search finished in {time.time() - started:.0f}s "
@@ -79,6 +85,7 @@ def _run_search(job_id: str, req: SearchRequest) -> dict[str, Any]:
         "hits": hits,
         "n_hits": len(hits),
         "database": req.database if req.input_type == "sequence" else "nucleotide",
+        "entrez_query": entrez_query,
         "elapsed_s": round(time.time() - started, 1),
     }
     (jobs.workdir(job_id) / "search.json").write_text(json.dumps(result, indent=2))
@@ -118,7 +125,7 @@ def _run_design(job_id: str, req: DesignRequest) -> dict[str, Any]:
 
     # 1 — download -----------------------------------------------------------
     jobs.log(job_id, f"Downloading {len(req.accessions)} record(s) from NCBI",
-             progress=8, stage="download")
+             progress=8, stage="download", tool="NCBI efetch")
     t0 = time.time()
     records, failures = ncbi.fetch_sequences(req.accessions, req.ranges,
                                              progress=progress)
@@ -154,7 +161,7 @@ def _run_design(job_id: str, req: DesignRequest) -> dict[str, Any]:
     trim_dropped: list[dict[str, str]] = []
     if req.trim_to_homology and len(seq_records) > 1:
         jobs.log(job_id, "Trimming records to the region homologous to the anchor",
-                 progress=18, stage="trim")
+                 progress=18, stage="trim", tool="blastn (local)")
         anchor, anchor_name = homology.pick_anchor(
             seq_records, query_seq, workdir=workdir, progress=progress)
         seq_records, trim_dropped = homology.trim_to_anchor(
@@ -179,7 +186,7 @@ def _run_design(job_id: str, req: DesignRequest) -> dict[str, Any]:
 
     # 3 — align --------------------------------------------------------------
     jobs.log(job_id, f"Aligning {len(seq_records)} sequences with MAFFT",
-             progress=25, stage="align")
+             progress=25, stage="align", tool="MAFFT")
     t0 = time.time()
     aligned = alignment.run_mafft(seq_records, progress=progress, workdir=workdir)
     timings["mafft_s"] = round(time.time() - t0, 1)
@@ -193,7 +200,7 @@ def _run_design(job_id: str, req: DesignRequest) -> dict[str, Any]:
 
     # 4 — conservation -------------------------------------------------------
     jobs.log(job_id, "Scoring conservation per alignment column",
-             progress=52, stage="conservation")
+             progress=52, stage="conservation", tool="conservation scan")
 
     # Records that barely overlap the target would veto every conserved column
     # under a strict gap threshold. They are excluded from the conservation
@@ -261,7 +268,7 @@ def _run_design(job_id: str, req: DesignRequest) -> dict[str, Any]:
     # 5 — Primer3 ------------------------------------------------------------
     jobs.log(job_id, f"Primer3 ({req.primer3.mode}) on the reference, "
                      f"{len(excluded)} variable region(s) excluded",
-             progress=68, stage="primer3")
+             progress=68, stage="primer3", tool="Primer3")
     t0 = time.time()
     p3 = primer3_runner.run_primer3(ref_seq, req.gene_label, req.primer3, excluded)
     timings["primer3_s"] = round(time.time() - t0, 1)
@@ -287,7 +294,7 @@ def _run_design(job_id: str, req: DesignRequest) -> dict[str, Any]:
 
     # 6 — validation ---------------------------------------------------------
     jobs.log(job_id, "Checking every oligo against every sequence",
-             progress=84, stage="validate")
+             progress=84, stage="validate", tool="in-silico validation")
     t0 = time.time()
     for pair in pairs:
         pair["binding"] = {
@@ -313,7 +320,7 @@ def _run_design(job_id: str, req: DesignRequest) -> dict[str, Any]:
     specificity: dict[str, Any] = {"available": False, "reason": "not requested"}
     if req.specificity_check:
         jobs.log(job_id, "Local BLAST specificity check against the downloaded set",
-                 progress=90)
+                 progress=90, tool="blastn-short (local)")
         oligos: list[dict[str, str]] = []
         for pair in pairs:
             oligos += validation.build_oligo_list(pair, f"pair{pair['rank']}")
