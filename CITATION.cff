@@ -1,0 +1,123 @@
+cff-version: 1.2.0
+message: If you use this work, please cite it as below.
+title: 'DesignLab: conservation-aware PCR and qPCR primer design across homologous sequences'
+type: software
+authors:
+- given-names: Gültekin
+  family-names: Ünal
+  orcid: https://orcid.org/0000-0002-8996-7028
+  affiliation: Ankara University, Faculty of Veterinary Medicine, Department of Microbiology
+abstract: A browser-based tool that takes a gene sequence or a gene name, retrieves
+  homologous records from NCBI, aligns them with MAFFT, locates the conserved blocks
+  and lets Primer3 place primers only inside those blocks. Every oligo is then checked
+  base by base against every downloaded sequence, and each binding site is drawn on
+  the alignment with its mismatches. Base-pairing geometry is computed by the tool;
+  thermodynamic values come from Primer3 alone. Research use only; primers are not
+  validated for diagnostic use without wet-lab confirmation.
+repository-code: https://github.com/cinnetcrash/designlab
+url: https://github.com/cinnetcrash/designlab
+license: MIT
+keywords:
+- PCR primer design
+- qPCR
+- hydrolysis probe
+- multiple sequence alignment
+- conserved regions
+- Primer3
+- MAFFT
+- NCBI
+- FastAPI
+references:
+- type: article
+  title: 'MAFFT multiple sequence alignment software version 7: improvements in performance
+    and usability'
+  authors:
+  - family-names: Katoh
+    given-names: Kazutaka
+  - family-names: Standley
+    given-names: Daron M.
+  journal: Molecular Biology and Evolution
+  volume: 30
+  issue: 4
+  start: 772
+  end: 780
+  year: 2013
+  doi: 10.1093/molbev/mst010
+- type: article
+  title: 'Primer3--new capabilities and interfaces'
+  authors:
+  - family-names: Untergasser
+    given-names: Andreas
+  - family-names: Cutcutache
+    given-names: Ioana
+  - family-names: Koressaar
+    given-names: Triinu
+  - family-names: Ye
+    given-names: Jian
+  - family-names: Faircloth
+    given-names: Brant C.
+  - family-names: Remm
+    given-names: Maido
+  - family-names: Rozen
+    given-names: Steven G.
+  journal: Nucleic Acids Research
+  volume: 40
+  issue: 15
+  start: e115
+  year: 2012
+  doi: 10.1093/nar/gks596
+- type: article
+  title: 'BLAST+: architecture and applications'
+  authors:
+  - family-names: Camacho
+    given-names: Christiam
+  - family-names: Coulouris
+    given-names: George
+  - family-names: Avagyan
+    given-names: Vahram
+  - family-names: Ma
+    given-names: Ning
+  - family-names: Papadopoulos
+    given-names: Jason
+  - family-names: Bealer
+    given-names: Kevin
+  - family-names: Madden
+    given-names: Thomas L.
+  journal: BMC Bioinformatics
+  volume: 10
+  start: 421
+  year: 2009
+  doi: 10.1186/1471-2105-10-421
+- type: article
+  title: 'Biopython: freely available Python tools for computational molecular biology
+    and bioinformatics'
+  authors:
+  - family-names: Cock
+    given-names: Peter J. A.
+  - family-names: Antao
+    given-names: Tiago
+  - family-names: Chang
+    given-names: Jeffrey T.
+  - family-names: Chapman
+    given-names: Brad A.
+  - family-names: Cox
+    given-names: Cymon J.
+  - family-names: Dalke
+    given-names: Andrew
+  - family-names: Friedberg
+    given-names: Iddo
+  - family-names: Hamelryck
+    given-names: Thomas
+  - family-names: Kauff
+    given-names: Frank
+  - family-names: Wilczynski
+    given-names: Bartek
+  - family-names: de Hoon
+    given-names: Michiel J. L.
+  journal: Bioinformatics
+  volume: 25
+  issue: 11
+  start: 1422
+  end: 1423
+  year: 2009
+  doi: 10.1093/bioinformatics/btp163
