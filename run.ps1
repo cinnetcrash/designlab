@@ -28,7 +28,9 @@ Set-Location -Path $PSScriptRoot
 
 # The project venv is preferred: a system-wide Python may carry package versions
 # this app cannot use, and installing into it could break other tools.
-$venvPython = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+$onWindows = $IsWindows -or ($env:OS -eq 'Windows_NT')
+$venvPython = if ($onWindows) { Join-Path $PSScriptRoot '.venv/Scripts/python.exe' }
+              else            { Join-Path $PSScriptRoot '.venv/bin/python' }
 if (Test-Path $venvPython) {
     $python = $venvPython
 } else {

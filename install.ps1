@@ -10,7 +10,7 @@
     into .\tools\ and adds them to PATH for the current session. Nothing is
     installed system-wide and no installer is executed: the two archives are
     unpacked and used in place, so removing .\tools\ undoes it completely.
-    BLAST+ is not downloaded automatically — NCBI ships it as an installer, and
+    BLAST+ is not downloaded automatically -- NCBI ships it as an installer, and
     running a downloaded installer is your decision, not this script's.
 
 .EXAMPLE
@@ -41,7 +41,7 @@ function Write-Head { param($m) Write-Host "`n$m" -ForegroundColor Cyan }
 Write-Host 'Primer Designer installer (Windows)' -ForegroundColor Cyan
 Write-Host "  project: $PSScriptRoot"
 
-# ─── 1. Python ───────────────────────────────────────────────────────────────
+# --- 1. Python ------------------------------------------------------------
 Write-Head '1/3  Python environment'
 
 if (-not $Python) {
@@ -64,12 +64,19 @@ if ($tooOld -eq 'True') {
 }
 Write-Ok "python $version ($Python)"
 
-if (-not (Test-Path '.venv\Scripts\python.exe')) {
+# Windows puts the interpreter in .venv\Scripts, every other platform in
+# .venv/bin. Handling both lets the script be smoke-tested with pwsh on Linux
+# instead of only ever running for the first time on a user's machine.
+$onWindows = $IsWindows -or ($env:OS -eq 'Windows_NT')
+$venvPython = if ($onWindows) { Join-Path $PSScriptRoot '.venv/Scripts/python.exe' }
+              else            { Join-Path $PSScriptRoot '.venv/bin/python' }
+
+if (-not (Test-Path $venvPython)) {
     Write-Host '  creating .venv ...'
     & $Python -m venv .venv
     if ($LASTEXITCODE -ne 0) { Write-Bad 'could not create .venv'; exit 1 }
 }
-$venvPython = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+if (-not (Test-Path $venvPython)) { Write-Bad "venv created but $venvPython is missing"; exit 1 }
 Write-Ok '.venv ready'
 
 Write-Host '  installing Python packages (this can take a few minutes) ...'
@@ -78,7 +85,7 @@ Write-Host '  installing Python packages (this can take a few minutes) ...'
 if ($LASTEXITCODE -ne 0) { Write-Bad 'pip install failed - see the output above'; exit 1 }
 Write-Ok 'Python packages installed'
 
-# ─── 2. External programs ────────────────────────────────────────────────────
+# --- 2. External programs ----------------------------------------------------
 Write-Head '2/3  External programs'
 
 $toolsDir = Join-Path $PSScriptRoot 'tools'
@@ -93,7 +100,9 @@ function Test-Tool {
 
 function Install-PortableTool {
     param($Name, $Url, $Destination)
-    $zip = Join-Path $env:TEMP "$Name.zip"
+    # [System.IO.Path]::GetTempPath() rather than $env:TEMP: the environment
+    # variable is not guaranteed to be set, and Join-Path throws on a null path.
+    $zip = Join-Path ([System.IO.Path]::GetTempPath()) "$Name.zip"
     Write-Host "  downloading $Name from $Url"
     Invoke-WebRequest -Uri $Url -OutFile $zip -UseBasicParsing
     $hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash
@@ -144,21 +153,21 @@ if ($missing.Count -gt 0) {
     }
 }
 
-# ─── 3. Verify ───────────────────────────────────────────────────────────────
+# --- 3. Verify ------------------------------------------------------------
 Write-Head '3/3  Verifying'
 
 $env:PYTHONPATH = Join-Path $PSScriptRoot 'backend'
-& $venvPython tests\test_portability.py 2>&1 | Out-Null
+& $venvPython (Join-Path $PSScriptRoot 'tests/test_portability.py') 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) { Write-Ok 'cross-platform checks pass' }
 else { Write-Warn 'portability checks failed - run: .venv\Scripts\python.exe tests\test_portability.py' }
 
-& $venvPython tests\test_entrez_query.py 2>&1 | Out-Null
+& $venvPython (Join-Path $PSScriptRoot 'tests/test_entrez_query.py') 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) { Write-Ok 'query builder checks pass' }
 else { Write-Warn 'query builder checks failed' }
 
 if ((Get-Command mafft -ErrorAction SilentlyContinue) -and
     (Get-Command primer3_core -ErrorAction SilentlyContinue)) {
-    & $venvPython tests\test_core_offline.py 2>&1 | Out-Null
+    & $venvPython (Join-Path $PSScriptRoot 'tests/test_core_offline.py') 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) { Write-Ok 'pipeline test passes (real MAFFT and Primer3)' }
     else { Write-Warn 'pipeline test failed - run: .venv\Scripts\python.exe tests\test_core_offline.py' }
 }

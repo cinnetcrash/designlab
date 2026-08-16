@@ -93,12 +93,36 @@ def test_windows_config_path_reaches_primer3_correctly() -> None:
 
 
 def test_config_is_searched_next_to_the_binary() -> None:
-    """The Windows Primer3 zip ships primer3_config beside primer3_core.exe."""
-    candidates = config._primer3_config_candidates()
-    assert any("primer3_config" in c for c in candidates)
-    # The directory holding the binary must be among the places searched.
-    binary_dir = str(Path(config.PRIMER3_BIN).resolve().parent)
-    assert any(c.startswith(binary_dir) for c in candidates), candidates
+    """The Windows Primer3 zip ships primer3_config beside primer3_core.exe.
+
+    Verified against the real archive: primer3-2.6.1_exe_for_windows.zip puts
+    primer3_core.exe in src/ with primer3_config/ in the same directory.
+    """
+    fake_bin = Path(config.DATA_DIR) / "_p3probe" / "src" / "primer3_core.exe"
+    (fake_bin.parent / "primer3_config").mkdir(parents=True, exist_ok=True)
+    fake_bin.touch()
+
+    real_bin = config.PRIMER3_BIN
+    try:
+        config.PRIMER3_BIN = str(fake_bin)
+        candidates = config._primer3_config_candidates()
+        expected = str(fake_bin.parent / "primer3_config")
+        assert expected in candidates, \
+            f"the directory holding the binary is not searched: {candidates}"
+        chosen = next((c for c in candidates if Path(c).is_dir()), None)
+        assert chosen == expected, f"picked {chosen} instead of {expected}"
+    finally:
+        config.PRIMER3_BIN = real_bin
+
+    # Installing the tools is a separate step from running this test, so a
+    # missing binary must not fail it — install.ps1 runs this before the user
+    # has had a chance to install Primer3.
+    config.PRIMER3_BIN = "definitely-not-installed"
+    try:
+        assert config._primer3_config_candidates(), \
+            "the system-wide fallbacks should still be offered"
+    finally:
+        config.PRIMER3_BIN = real_bin
 
 
 def test_no_posix_only_module_is_imported() -> None:

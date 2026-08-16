@@ -56,11 +56,17 @@ is only worth chasing if you also use BLAST elsewhere and want one version.
 
 ### Windows
 
-**These scripts have not been run on Windows.** They were written on Linux,
-mirror the bash ones, and were reviewed by hand — but nothing here has executed
-on a Windows machine. Report what breaks rather than working around it. The
-Python code itself is portable and its Windows-specific branches are covered by
-`tests/test_portability.py`, which does run in CI on Linux.
+**These scripts have not been run on Windows itself.** What has been done:
+they were parsed by PowerShell 7.6.5, checked with PSScriptAnalyzer (clean apart
+from `PSAvoidUsingWriteHost`, which is the point of a coloured installer), and
+*executed end to end* under `pwsh` on Linux — `install.ps1` creates the venv,
+installs the packages, detects the tools and runs the verification suite, and
+`run.ps1` starts the server and serves `/api/health`. The `-WithTools` path was
+run against the real Primer3 Windows archive.
+
+That leaves Windows-only behaviour untested: path handling under `cmd.exe`,
+the MAFFT `.bat` wrapper, and NCBI's BLAST+ installer. Report what breaks
+rather than working around it.
 
 ```powershell
 git clone https://github.com/cinnetcrash/primer-designer.git
