@@ -1,4 +1,17 @@
-# DesignLab
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"
+            srcset="docs/assets/brand/designlab-logo-dark.svg">
+    <img src="docs/assets/brand/designlab-logo.svg" alt="DesignLab" width="720">
+  </picture>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-blue">
+  <img alt="Ubuntu and Windows" src="https://img.shields.io/badge/runs%20on-Ubuntu%20%7C%20Windows-lightgrey">
+  <img alt="Research use only" src="https://img.shields.io/badge/research%20use-only-orange">
+</p>
 
 Web-based PCR / qPCR primer design against a group of homologous sequences.
 

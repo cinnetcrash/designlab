@@ -38,6 +38,7 @@ app = FastAPI(
 FRONTEND = config.FRONTEND_DIR
 app.mount("/css", StaticFiles(directory=FRONTEND / "css"), name="css")
 app.mount("/js", StaticFiles(directory=FRONTEND / "js"), name="js")
+app.mount("/assets", StaticFiles(directory=FRONTEND / "assets"), name="assets")
 
 DOWNLOADABLE = {
     "primers.tsv": "text/tab-separated-values",
