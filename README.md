@@ -19,8 +19,8 @@ no compiling:
 sudo apt update
 sudo apt install -y git python3-venv python3-pip mafft primer3 ncbi-blast+
 
-git clone https://github.com/cinnetcrash/primer-designer.git
-cd primer-designer
+git clone https://github.com/cinnetcrash/designlab.git
+cd designlab
 bash install.sh
 ./run.sh                       # http://127.0.0.1:8090
 ```
@@ -30,8 +30,8 @@ Or let the installer pull the system packages itself — it prints the exact
 actually missing:
 
 ```bash
-git clone https://github.com/cinnetcrash/primer-designer.git
-cd primer-designer && bash install.sh --with-apt && ./run.sh
+git clone https://github.com/cinnetcrash/designlab.git
+cd designlab && bash install.sh --with-apt && ./run.sh
 ```
 
 What the apt packages provide, with the versions this was verified against on
@@ -69,8 +69,8 @@ the MAFFT `.bat` wrapper, and NCBI's BLAST+ installer. Report what breaks
 rather than working around it.
 
 ```powershell
-git clone https://github.com/cinnetcrash/primer-designer.git
-cd primer-designer
+git clone https://github.com/cinnetcrash/designlab.git
+cd designlab
 .\install.ps1                 # add -WithTools to fetch the portable Primer3 build
 .\run.ps1                     # http://127.0.0.1:8090
 ```
@@ -102,8 +102,8 @@ the fallback — it is the same application, and that path is tested.
 ### Other systems
 
 ```bash
-git clone https://github.com/cinnetcrash/primer-designer.git
-cd primer-designer && bash install.sh --with-conda
+git clone https://github.com/cinnetcrash/designlab.git
+cd designlab && bash install.sh --with-conda
 ./run.sh                # http://127.0.0.1:8090
 PORT=9000 ./run.sh      # different port
 ```

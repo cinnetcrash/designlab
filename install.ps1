@@ -19,7 +19,7 @@
 
 .NOTES
     NOT TESTED ON WINDOWS. Written on Linux, mirroring install.sh. Please report
-    what breaks: https://github.com/cinnetcrash/primer-designer/issues
+    what breaks: https://github.com/cinnetcrash/designlab/issues
 
     Execution policy, if PowerShell refuses to run this:
         powershell -ExecutionPolicy Bypass -File .\install.ps1

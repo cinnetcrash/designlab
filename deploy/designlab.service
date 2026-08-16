@@ -18,7 +18,7 @@
 
 [Unit]
 Description=DesignLab (conservation-aware PCR/qPCR primer design)
-Documentation=https://github.com/cinnetcrash/primer-designer
+Documentation=https://github.com/cinnetcrash/designlab
 After=network-online.target
 
 [Service]
