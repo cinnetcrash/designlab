@@ -1,4 +1,4 @@
-/* Primer Designer — visualisation layer.
+/* DesignLab — visualisation layer.
    Everything drawn here comes from the job result; nothing is smoothed,
    interpolated or invented. When a pixel aggregates several alignment columns
    the worst-case column wins, so a single mismatch never disappears at zoom-out. */

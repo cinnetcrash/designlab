@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the Primer Designer web app.
+# Start the DesignLab web app.
 #   ./run.sh            → http://127.0.0.1:8090
 #   PORT=9000 ./run.sh  → http://127.0.0.1:9000
 set -euo pipefail
@@ -20,5 +20,5 @@ for tool in mafft primer3_core blastn makeblastdb; do
 done
 
 export PYTHONPATH="$PWD/backend"
-echo "Primer Designer → http://${HOST}:${PORT}"
+echo "DesignLab → http://${HOST}:${PORT}"
 exec "$PYTHON" -m uvicorn main:app --app-dir backend --host "$HOST" --port "$PORT" "$@"

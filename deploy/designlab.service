@@ -1,23 +1,23 @@
-# Run Primer Designer as a user service on Ubuntu, so it survives logout and
+# Run DesignLab as a user service on Ubuntu, so it survives logout and
 # comes back after a reboot. This is optional — ./run.sh in a terminal is fine
 # for personal use.
 #
 #   mkdir -p ~/.config/systemd/user
-#   sed "s|%PROJECT%|$HOME/primer-designer|" deploy/primer-designer.service \
-#       > ~/.config/systemd/user/primer-designer.service
+#   sed "s|%PROJECT%|$HOME/designlab|" deploy/designlab.service \
+#       > ~/.config/systemd/user/designlab.service
 #   systemctl --user daemon-reload
-#   systemctl --user enable --now primer-designer
+#   systemctl --user enable --now designlab
 #   loginctl enable-linger "$USER"      # keep it running when logged out
 #
-#   systemctl --user status primer-designer
-#   journalctl --user -u primer-designer -f
+#   systemctl --user status designlab
+#   journalctl --user -u designlab -f
 #
 # The service binds to 127.0.0.1 on purpose: the app has no authentication, so
 # it must not be reachable from the network without a reverse proxy in front of
 # it that provides one.
 
 [Unit]
-Description=Primer Designer (conservation-aware PCR/qPCR primer design)
+Description=DesignLab (conservation-aware PCR/qPCR primer design)
 Documentation=https://github.com/cinnetcrash/primer-designer
 After=network-online.target
 

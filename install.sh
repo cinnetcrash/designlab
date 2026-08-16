@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Primer Designer — installer
+# DesignLab — installer
 #
 #   bash install.sh                install Python deps, then report on the
 #                                  external tools and how to get any that are
@@ -18,7 +18,7 @@ set -uo pipefail
 
 cd "$(dirname "$0")"
 PROJECT_DIR="$PWD"
-CONDA_ENV_NAME="${CONDA_ENV_NAME:-primer-designer}"
+CONDA_ENV_NAME="${CONDA_ENV_NAME:-designlab}"
 WITH_CONDA=0
 WITH_APT=0
 for arg in "$@"; do
@@ -35,7 +35,7 @@ ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
 fail() { printf '  \033[31m✗\033[0m %s\n' "$*"; }
 
-bold "Primer Designer installer"
+bold "DesignLab installer"
 echo "  project: $PROJECT_DIR"
 echo
 

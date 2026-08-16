@@ -1,4 +1,4 @@
-# Primer Designer
+# DesignLab
 
 Web-based PCR / qPCR primer design against a group of homologous sequences.
 
@@ -116,7 +116,7 @@ browser. With no flag it only reports on missing tools; `--with-apt` and
 
 ### Keeping it running (optional)
 
-For a lab machine that should serve the app after a reboot, `deploy/primer-designer.service`
+For a lab machine that should serve the app after a reboot, `deploy/designlab.service`
 is a systemd user unit with the install commands in its header. It binds to
 127.0.0.1 deliberately: **the app has no authentication**, so it must not be
 exposed on a network without a reverse proxy that provides one. `HOST=0.0.0.0 ./run.sh`
@@ -171,7 +171,7 @@ export PRIMER_DATA_DIR=/data/pd    # where runs and the database are kept
 
 | Symptom | Cause and fix |
 |---|---|
-| Header badge says a tool is missing | That binary is not on PATH. If you installed with `--with-conda`, run `conda activate primer-designer` first, then `./run.sh` |
+| Header badge says a tool is missing | That binary is not on PATH. If you installed with `--with-conda`, run `conda activate designlab` first, then `./run.sh` |
 | `Router.__init__() got an unexpected keyword argument` on startup | The app is running on a Python that has an incompatible starlette. Use `./run.sh`, which picks `.venv/bin/python` |
 | Search hangs for minutes | A sequence search runs at NCBI and typically takes 30-90 s. The header badge shows what is running; the gene-name search answers in seconds |
 | History is empty after moving the machine | The database is an index — `POST /api/history/rebuild` re-reads `data/jobs/` |

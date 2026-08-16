@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Start Primer Designer on Windows.
+    Start DesignLab on Windows.
 
 .EXAMPLE
     .\run.ps1
@@ -48,5 +48,5 @@ foreach ($tool in 'mafft', 'primer3_core', 'blastn', 'makeblastdb') {
 
 $env:PYTHONPATH = Join-Path $PSScriptRoot 'backend'
 
-Write-Host "Primer Designer -> http://${BindHost}:${Port}" -ForegroundColor Cyan
+Write-Host "DesignLab -> http://${BindHost}:${Port}" -ForegroundColor Cyan
 & $python -m uvicorn main:app --app-dir backend --host $BindHost --port $Port

@@ -1,4 +1,4 @@
-/* Primer Designer — application flow */
+/* DesignLab — application flow */
 
 const $ = (id) => document.getElementById(id);
 const esc = VIZ.esc;

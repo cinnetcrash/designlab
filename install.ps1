@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Install Primer Designer on Windows.
+    Install DesignLab on Windows.
 
 .DESCRIPTION
     Creates the project virtual environment, installs the Python packages,
@@ -38,7 +38,7 @@ function Write-Warn { param($m) Write-Host "  [!]    $m" -ForegroundColor Yellow
 function Write-Bad  { param($m) Write-Host "  [fail] $m" -ForegroundColor Red }
 function Write-Head { param($m) Write-Host "`n$m" -ForegroundColor Cyan }
 
-Write-Host 'Primer Designer installer (Windows)' -ForegroundColor Cyan
+Write-Host 'DesignLab installer (Windows)' -ForegroundColor Cyan
 Write-Host "  project: $PSScriptRoot"
 
 # --- 1. Python ------------------------------------------------------------

@@ -1,4 +1,4 @@
-"""Primer Designer — FastAPI application.
+"""DesignLab — FastAPI application.
 
 Flow: paste a sequence (or a gene name) → pick how many NCBI records to pull →
 MAFFT alignment → conserved blocks → Primer3 → in-silico validation, with every
@@ -30,7 +30,7 @@ logging.basicConfig(
 logger = logging.getLogger("primer_designer")
 
 app = FastAPI(
-    title="Primer Designer",
+    title="DesignLab",
     version="2.0.0",
     description="Conservation-aware PCR/qPCR primer design with NCBI integration",
 )

@@ -1,4 +1,4 @@
-/* Primer Designer — interface language (Turkish / English).
+/* DesignLab — interface language (Turkish / English).
  *
  * Static markup carries data-i18n / data-i18n-ph / data-i18n-title attributes
  * and is translated in place on load and on every language switch. Text built

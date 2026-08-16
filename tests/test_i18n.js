@@ -157,7 +157,7 @@ check('every element that shows text carries a translation marker', () => {
     const [, tag, attrs, text] = m;
     if (/data-i18n/.test(attrs)) continue;
     if (!/[A-Za-zÇĞİÖŞÜçğıöşü]{3,}/.test(text)) continue;   // icons, digits
-    if (text.trim() === 'Primer Designer') continue;         // product name
+    if (text.trim() === 'DesignLab') continue;         // product name
     untagged.push(`${tag}:"${text.trim().slice(0, 30)}"`);
   }
   assert(!untagged.length, 'not translated: ' + untagged.join(', '));
