@@ -48,6 +48,9 @@ jobs:
       - name: Failure messages
         run: python tests/test_diagnostics.py
 
+      - name: Conservation edge cases
+        run: python tests/test_conservation_edges.py
+
       - name: Entrez query builder
         run: python tests/test_entrez_query.py
 
