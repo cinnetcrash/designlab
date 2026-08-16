@@ -6,12 +6,12 @@
     Creates the project virtual environment, installs the Python packages,
     checks for MAFFT / Primer3 / BLAST+ and runs the offline tests.
 
-    With -WithTools it also downloads the portable builds of MAFFT and Primer3
-    into .\tools\ and adds them to PATH for the current session. Nothing is
-    installed system-wide and no installer is executed: the two archives are
-    unpacked and used in place, so removing .\tools\ undoes it completely.
-    BLAST+ is not downloaded automatically -- NCBI ships it as an installer, and
-    running a downloaded installer is your decision, not this script's.
+    With -WithTools it downloads the portable Primer3 build into .\tools\ and
+    adds it to PATH for the current session. Nothing is installed system-wide
+    and no installer is executed, so removing .\tools\ undoes it completely.
+    MAFFT and BLAST+ are not downloaded: MAFFT's archive name carries its
+    version, and BLAST+ ships as an installer whose execution is your decision,
+    not this script's. The script prints the link for each.
 
 .EXAMPLE
     .\install.ps1

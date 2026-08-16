@@ -21,6 +21,21 @@ Entrez.email = config.ENTREZ_EMAIL
 if config.ENTREZ_API_KEY:
     Entrez.api_key = config.ENTREZ_API_KEY
 
+# Biopython's Entrez helpers call urlopen() with no timeout, and the default
+# socket timeout is None, so a connection that is accepted and then never
+# answered pins a worker thread forever. There are four of them; four such
+# calls and the application stops accepting work with no error anywhere.
+# config.ENTREZ_TIMEOUT existed but was never applied — this is where it lands.
+_ENTREZ_URLOPEN = Entrez.urlopen
+
+
+def _urlopen_with_timeout(*args: Any, **kwargs: Any):
+    kwargs.setdefault("timeout", config.ENTREZ_TIMEOUT)
+    return _ENTREZ_URLOPEN(*args, **kwargs)
+
+
+Entrez.urlopen = _urlopen_with_timeout
+
 Progress = Callable[[str], None]
 
 # WGS/TSA master accessions: 4-6 letters, two digits, then all zeros.

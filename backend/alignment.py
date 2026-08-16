@@ -36,7 +36,11 @@ def run_mafft(records: list[dict[str, Any]],
 
     workdir = workdir or Path(tempfile.mkdtemp(prefix="pd_"))
     workdir.mkdir(parents=True, exist_ok=True)
-    in_path = workdir / "input.fasta"
+    # Deliberately not "input.fasta": the pipeline writes that file with the
+    # real accessions and offers it for download. MAFFT needs anonymous >s0..>sN
+    # headers to map results back by index, and writing those over the user's
+    # copy silently destroyed the identities it documents.
+    in_path = workdir / "mafft_input.fasta"
     out_path = workdir / "aligned.fasta"
 
     with in_path.open("w") as fh:
@@ -115,6 +119,13 @@ def conservation_profile(aligned: list[str]) -> list[dict[str, Any]]:
             "identity": round(identity, 4),
             "gap_fraction": round(gaps / n, 4),
             "ambiguous": other,
+            # Identity is agreement among the bases that were actually read, so
+            # a column that is A in one record and N in the rest scores 1.0.
+            # That is the right definition, but it means identity alone cannot
+            # gate a conserved block: an assembly gap would otherwise look like
+            # the most conserved region in the alignment. The fraction of
+            # unread bases is therefore carried separately and checked too.
+            "ambiguous_fraction": round(other / n, 4),
             "entropy": round(entropy, 4),
             "code": degenerate_code(observed) if observed else "-",
         })
@@ -187,18 +198,29 @@ def build_reference(aligned_records: list[dict[str, str]],
 
 def conserved_blocks(profile: list[dict[str, Any]], reference: dict[str, Any],
                      identity_threshold: float, max_gap_fraction: float,
-                     min_block_length: int) -> list[dict[str, Any]]:
+                     min_block_length: int,
+                     max_ambiguous_fraction: float = 0.0) -> list[dict[str, Any]]:
     """Contiguous runs of conserved columns, expressed in reference coordinates.
 
     A column is conserved when the majority base is carried by at least
-    `identity_threshold` of the informative sequences and the gap fraction
-    stays at or below `max_gap_fraction`.
+    `identity_threshold` of the informative sequences, the gap fraction stays at
+    or below `max_gap_fraction`, and no more than `max_ambiguous_fraction` of
+    the records are unread (N or another ambiguity code) there.
+
+    That last condition is not a refinement, it is load-bearing. Identity is
+    computed over the bases actually read, so a column that is A in one draft
+    genome and N in the other nine scores identity 1.0 with no gaps. Without
+    the ambiguity check an assembly gap — the place with the least information
+    in the whole alignment — is scored as its most conserved region, and a
+    primer placed there is then reported as a perfect match everywhere,
+    because an N matches any base.
     """
     pos_of_col: dict[int, int] = {c: p for p, c in enumerate(reference["col_of_pos"])}
 
     def ok(col: dict[str, Any]) -> bool:
         return (col["gap_fraction"] <= max_gap_fraction
                 and col["identity"] >= identity_threshold
+                and col.get("ambiguous_fraction", 0.0) <= max_ambiguous_fraction
                 and col["major"] in BASES)
 
     blocks: list[dict[str, Any]] = []
@@ -243,13 +265,34 @@ def variable_regions(blocks: list[dict[str, Any]], ref_length: int) -> list[list
 
     Primer3 receives these as SEQUENCE_EXCLUDED_REGION, so primers land only in
     conserved blocks while the amplicon interior may still vary.
+
+    Two blocks can be adjacent in reference coordinates and still be separated
+    in the alignment: when a minority of records carry an insertion, the
+    consensus drops those columns, so the reference runs straight from one block
+    into the next. The junction is real for the records that carry the
+    insertion — their binding site is split in two — but it has zero width in
+    reference space, so the plain complement emits nothing there and Primer3 is
+    free to design a primer straddling a joint that exists in no actual
+    sequence. One base of the earlier block is therefore excluded at every such
+    junction: it is the shortest exclusion that cannot be bridged.
     """
     excluded: list[list[int]] = []
     cursor = 0
-    for b in sorted(blocks, key=lambda x: x["ref_start"]):
+    ordered = sorted(blocks, key=lambda x: x["ref_start"])
+
+    for i, b in enumerate(ordered):
         if b["ref_start"] > cursor:
             excluded.append([cursor, b["ref_start"] - cursor])
+        elif i and _is_welded(ordered[i - 1], b):
+            excluded.append([ordered[i - 1]["ref_end"], 1])
         cursor = b["ref_end"] + 1
+
     if cursor < ref_length:
         excluded.append([cursor, ref_length - cursor])
     return excluded
+
+
+def _is_welded(previous: dict[str, Any], following: dict[str, Any]) -> bool:
+    """True when two blocks touch in reference space but not in the alignment."""
+    return (following["ref_start"] == previous["ref_end"] + 1
+            and following["col_start"] > previous["col_end"])

@@ -188,6 +188,38 @@ def _persist(job_id: str) -> None:
     tmp.replace(path)
 
 
+def reconcile_interrupted(reason: str = "interrupted by a server restart"
+                          ) -> list[str]:
+    """Mark jobs that were still running when the process died.
+
+    Nothing survives a restart: the thread pool is gone, but job.json still says
+    "running" with a wall-clock start time. Left alone those become permanent
+    ghosts — /api/job reports them running forever with an ever-growing elapsed
+    time, and the UI badge counts them. They are failures, and saying so is more
+    useful than an honest-looking spinner that will never stop.
+    """
+    reconciled: list[str] = []
+    for path in sorted(config.JOBS_DIR.glob("*/job.json")):
+        try:
+            job = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if job.get("status") not in ("running", "queued"):
+            continue
+        job.update({"status": "error", "stage": "error", "error": reason,
+                    "tool": None, "tool_since": None, "updated": _now()})
+        job.setdefault("log", []).append({"time": _now(), "message": reason})
+        try:
+            path.write_text(json.dumps(job, indent=2))
+        except OSError:
+            continue
+        reconciled.append(job.get("id") or path.parent.name)
+    if reconciled:
+        logger.info("marked %d interrupted run(s) as failed: %s",
+                    len(reconciled), ", ".join(reconciled))
+    return reconciled
+
+
 def run_in_background(job_id: str, fn: Callable[[str], Any]) -> None:
     """Run `fn(job_id)`; store its return value as the job result."""
 

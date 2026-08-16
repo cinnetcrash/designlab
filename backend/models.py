@@ -84,6 +84,10 @@ class ConservationSettings(BaseModel):
     # Records covering less than this fraction of the alignment are excluded
     # from the conservation calculation (they are still validated against).
     min_record_coverage: float = Field(0.6, ge=0.0, le=1.0)
+    # Fraction of records allowed to be unread (N) in a conserved column. The
+    # default of 0 is deliberate: identity is computed over the bases actually
+    # read, so without this an assembly gap scores as perfectly conserved.
+    max_ambiguous_fraction: float = Field(0.0, ge=0.0, le=1.0)
 
 
 class DesignRequest(BaseModel):

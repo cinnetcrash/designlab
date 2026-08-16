@@ -62,6 +62,7 @@ def oligo_binding(oligo: dict[str, Any], reference: dict[str, Any],
         aln = rec["aligned"]
         mismatches: list[dict[str, Any]] = []
         insertions = 0
+        unknown = 0
         observed: list[str] = []
         observed_cols: list[int] = []
 
@@ -76,6 +77,13 @@ def oligo_binding(oligo: dict[str, Any], reference: dict[str, Any],
             exp = expected[col]
             if base == "-":
                 kind = "deletion"
+            elif base.upper() not in "ACGT":
+                # An N matches everything, so counting it as a match would let
+                # an assembly gap be reported as a perfect binding site. It is
+                # not a mismatch either — nothing was read there. Track it
+                # separately and let it disqualify "perfect".
+                unknown += 1
+                continue
             elif iupac_match(base, exp):
                 continue
             else:
@@ -104,13 +112,19 @@ def oligo_binding(oligo: dict[str, Any], reference: dict[str, Any],
             "n_mismatch": len(mismatches),
             "n_three_prime_mismatch": sum(1 for m in mismatches if m["critical"]),
             "insertions": insertions,
-            "perfect": not mismatches and insertions == 0,
+            "unknown": unknown,
+            "perfect": not mismatches and insertions == 0 and unknown == 0,
         })
 
     n = len(per_sequence)
     perfect = sum(1 for s in per_sequence if s["perfect"])
+    # An insertion splits the binding site and an N means the site was never
+    # read; neither is a tolerable mismatch, so both disqualify a sequence here
+    # as well. Reporting them as tolerable was how a primer over an assembly
+    # gap earned a 100% headline number.
     tolerable = sum(1 for s in per_sequence
-                    if s["n_mismatch"] <= 2 and s["n_three_prime_mismatch"] == 0)
+                    if s["n_mismatch"] <= 2 and s["n_three_prime_mismatch"] == 0
+                    and s["insertions"] == 0 and s["unknown"] == 0)
     return {
         "role": oligo["role"],
         "sequence": oligo["sequence"],

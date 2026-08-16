@@ -236,7 +236,7 @@ const VIZ = (() => {
       parts.push(`<text class="svg-dim" x="${x(pos)}" y="136" text-anchor="middle">${pos.toLocaleString()}</text>`);
     }
     parts.push(`<text class="svg-dim" x="${m}" y="20">${t('v.reference')}: `
-      + `${result.reference.label} (${refLen.toLocaleString()} bp)</text>`);
+      + `${esc(result.reference.label)} (${refLen.toLocaleString()} bp)</text>`);
 
     const svg = `<svg viewBox="0 0 ${W} ${H + 14}" preserveAspectRatio="xMidYMid meet">${parts.join('')}</svg>`;
 

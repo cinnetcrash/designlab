@@ -58,6 +58,10 @@ def _startup() -> None:
     A failure here must not keep the application from starting: the database is
     an index over data/jobs/, and designing new primers does not depend on it.
     """
+    ghosts = jobs.reconcile_interrupted()
+    if ghosts:
+        logger.warning("%d run(s) were interrupted by a restart and are now "
+                       "marked failed: %s", len(ghosts), ", ".join(ghosts))
     try:
         imported = db.rebuild_from_disk()
         logger.info("run database ready at %s (%d run(s) imported from disk)",

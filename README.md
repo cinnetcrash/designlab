@@ -284,9 +284,9 @@ because it blocks extension far more effectively than an internal mismatch.
   genome-wide or host-background check — a primer that also binds somewhere in a
   host genome cannot be seen here. Run a full `blastn` against the relevant
   background separately before ordering.
-* `blastn -remote` runs on NCBI servers and typically takes 1-5 minutes; it can
-  fail when NCBI is busy. The gene-name (Entrez) route is fast but returns no
-  identity/coverage figures.
+* The sequence route submits the query to NCBI's BLAST URL API and typically
+  answers in 30-90 s; it can fail when NCBI is busy. The gene-name (Entrez)
+  route is fast but returns no identity/coverage figures.
 * Records longer than 50 kb are skipped at download, and a job accepts at most
   200 sequences.
 * Primers are designed for research use. Nothing here replaces wet-lab
@@ -360,6 +360,7 @@ deleted afterwards:
 python3 tests/test_core_offline.py     # no network; runs real MAFFT and Primer3
 python3 tests/test_entrez_query.py     # Entrez query builder, no network
 python3 tests/test_diagnostics.py      # failure messages name the right cause
+python3 tests/test_conservation_edges.py  # an N-run and a minority indel
 python3 tests/test_portability.py      # Windows branches, exercised from Linux
 python3 tests/test_db.py               # run database, in a temporary data dir
 node    tests/test_i18n.js             # TR/EN dictionaries and markup coverage
@@ -380,6 +381,12 @@ running server before releasing anything.
 conserved block, that Primer3 coordinates match the reference sequence, that
 reverse-primer coordinates reverse-complement correctly, and that a planted
 substitution is reported at the right offset from the 3' end.
+
+`test_conservation_edges.py` covers the two ways a conserved block can come out
+wrong rather than absent — an assembly gap scored as perfectly conserved, and
+two blocks welded across an insertion only some records carry. Both were found
+by an adversarial review of the published code, and both produced a primer the
+tool then reported as good, which is the dangerous failure mode here.
 
 `test_diagnostics.py` is a regression test for failure messages that were wrong
 in the field. A design that fails is normal; a design that fails and blames the

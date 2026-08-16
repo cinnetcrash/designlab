@@ -237,6 +237,7 @@ def _run_design(job_id: str, req: DesignRequest) -> dict[str, Any]:
         identity_threshold=req.conservation.identity_threshold,
         max_gap_fraction=req.conservation.max_gap_fraction,
         min_block_length=req.conservation.min_block_length,
+        max_ambiguous_fraction=req.conservation.max_ambiguous_fraction,
     )
     ref_seq = reference["sequence"]
     excluded = alignment.variable_regions(blocks, len(ref_seq))
@@ -320,11 +321,15 @@ def _run_design(job_id: str, req: DesignRequest) -> dict[str, Any]:
             "forward": _block_of(pair["forward"], blocks),
             "reverse": _block_of(pair["reverse"], blocks),
         }
-        coverage = [pair["binding"]["forward"], pair["binding"]["reverse"]]
+        # Named apart from the per-record `coverage` computed before the loop:
+        # rebinding that name here overwrote result["record_coverage"] with
+        # oligo-binding dicts, which have no "label", so the record table and
+        # the run database silently lost their per-record coverage.
+        oligo_bindings = [pair["binding"]["forward"], pair["binding"]["reverse"]]
         if "probe" in pair["binding"]:
-            coverage.append(pair["binding"]["probe"])
+            oligo_bindings.append(pair["binding"]["probe"])
         pair["coverage_percent"] = round(
-            min(c["perfect_percent"] for c in coverage), 1)
+            min(c["perfect_percent"] for c in oligo_bindings), 1)
 
     specificity: dict[str, Any] = {"available": False, "reason": "not requested"}
     if req.specificity_check:
@@ -563,7 +568,11 @@ def _feasible_product_range(blocks: list[dict[str, Any]],
                     continue          # one block cannot hold both primers
                 candidate = 2 * min_primer
             else:
-                candidate = b["ref_start"] - a["ref_end"] + 2 * min_primer
+                # Both primers sit at the facing edges: the forward primer's 5'
+                # end at a.ref_end - min_primer + 1, the reverse primer's at
+                # b.ref_start + min_primer - 1. That span is one shorter than
+                # the naive difference.
+                candidate = b["ref_start"] - a["ref_end"] + 2 * min_primer - 1
             if smallest is None or candidate < smallest:
                 smallest = candidate
     if smallest is None:

@@ -138,8 +138,14 @@ def record_design(job_id: str, result: dict[str, Any], created: str) -> None:
     coverage_by_label = {c["label"]: c
                          for c in result.get("record_coverage") or []
                          if isinstance(c, dict) and "label" in c}
+    # A record can drop out in two different places: homology trimming (before
+    # the alignment) or the coverage filter (after it). Both must count as "did
+    # not contribute", otherwise the history claims a record informed a
+    # conserved block it was never part of.
     low = {c["label"] for c in result.get("low_coverage_records") or []
            if isinstance(c, dict) and "label" in c}
+    low |= {t["accession"] for t in result.get("trim_dropped") or []
+            if isinstance(t, dict) and "accession" in t}
 
     primer_rows = []
     for pair in pairs:

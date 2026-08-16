@@ -116,10 +116,14 @@ def test_impossible_product_window_is_not_printed() -> None:
            {"ref_start": 150, "ref_end": 214, "length": 65}]
     assert _feasible_product_range(two, 18) == (36, 215)
 
-    # When neither block alone is wide enough, the gap between them sets the floor.
+    # When neither block alone is wide enough, the gap between them sets the
+    # floor. With min_primer=18 the forward primer's 5' end sits at
+    # 24 - 18 + 1 = 7 and the reverse primer's at 150 + 18 - 1 = 167, so the
+    # shortest product spans 167 - 7 + 1 = 161 bases — one less than the naive
+    # block-to-block difference, which is what the code used to report.
     narrow = [{"ref_start": 0, "ref_end": 24, "length": 25},
               {"ref_start": 150, "ref_end": 174, "length": 25}]
-    assert _feasible_product_range(narrow, 18) == (150 - 24 + 36, 175)
+    assert _feasible_product_range(narrow, 18) == (161, 175)
 
     # Order of the input must not matter.
     assert _feasible_product_range(list(reversed(two)), 18) \
