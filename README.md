@@ -158,11 +158,17 @@ is active: conda base environments often carry a starlette version FastAPI
 cannot use, and installing into the base environment could break other tools on
 the machine.
 
-### Optional
+### Environment
+
+`NCBI_EMAIL` is the one worth setting before anything else: NCBI asks every
+Entrez client to identify itself and uses the address to warn about heavy use
+before throttling it. There is deliberately no default in the source — a baked-in
+address would attribute every installation's traffic to one person.
 
 ```bash
+export NCBI_EMAIL=you@example.com  # identify yourself to NCBI — set this first
 export NCBI_API_KEY=<key>          # ncbi.nlm.nih.gov/account/settings — lifts
-export NCBI_EMAIL=you@example.com  # the Entrez rate limit from 3 to 10 req/s
+                                   # the Entrez rate limit from 3 to 10 req/s
 export PORT=9000                   # default 8090
 export PRIMER_DATA_DIR=/data/pd    # where runs and the database are kept
 ```

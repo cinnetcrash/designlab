@@ -1,6 +1,7 @@
 """Runtime configuration: tool paths, defaults and directories."""
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
@@ -50,8 +51,20 @@ PRIMER3_CONFIG = next(
 )
 
 # ─── NCBI ────────────────────────────────────────────────────────────────────
-ENTREZ_EMAIL = os.environ.get("NCBI_EMAIL", "gultekinnunal@gmail.com")
+# NCBI asks every Entrez client to identify itself, and uses the address to warn
+# about excessive use before blocking. It must therefore be the address of the
+# person actually running this instance — never a default baked into the source,
+# which would attribute every installation's traffic to one person.
+ENTREZ_EMAIL = os.environ.get("NCBI_EMAIL", "").strip()
 ENTREZ_API_KEY = os.environ.get("NCBI_API_KEY") or None
+
+if not ENTREZ_EMAIL:
+    ENTREZ_EMAIL = "designlab-user@example.invalid"
+    logging.getLogger("config").warning(
+        "NCBI_EMAIL is not set. NCBI asks clients to identify themselves and "
+        "may throttle anonymous traffic; set NCBI_EMAIL to your own address "
+        "before running larger searches."
+    )
 
 # ─── Timeouts (seconds) ──────────────────────────────────────────────────────
 MAFFT_TIMEOUT = int(os.environ.get("MAFFT_TIMEOUT", 900))
