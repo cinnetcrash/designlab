@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/cinnetcrash/designlab/actions/workflows/ci.yml"><img alt="tests" src="https://github.com/cinnetcrash/designlab/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-blue">
   <img alt="Ubuntu and Windows" src="https://img.shields.io/badge/runs%20on-Ubuntu%20%7C%20Windows-lightgrey">
@@ -367,7 +368,13 @@ node    tests/test_frontend_flow.js    # whole UI flow against a running server
 node    tests/test_frontend_flow.js --blast --lang=en   # BLAST route, English UI
 ```
 
-`install.sh` runs the offline ones for you at the end of the install.
+`install.sh` runs the offline ones for you at the end of the install, and CI runs
+all of them on Ubuntu 24.04 against Python 3.11 and 3.12 on every push.
+
+`test_frontend_flow.js` is deliberately **not** in CI: it reaches NCBI, and a
+build that goes red because NCBI was busy teaches nobody anything — a test
+allowed to fail for external reasons stops being read. Run it locally against a
+running server before releasing anything.
 
 `test_core_offline.py` checks that mutated windows never end up inside a
 conserved block, that Primer3 coordinates match the reference sequence, that

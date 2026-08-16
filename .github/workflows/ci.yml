@@ -1,0 +1,146 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Only the suites that need no network run here. The ones that reach NCBI
+# (tests/test_frontend_flow.js) are deliberately left out: a red build caused by
+# NCBI being busy teaches nobody anything, and a test that is allowed to fail
+# for external reasons stops being read.
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the external programs
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y mafft primer3 ncbi-blast+
+          mafft --version
+          primer3_core --about | head -2
+          blastn -version | head -1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install the Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Pipeline (runs real MAFFT and Primer3)
+        run: python tests/test_core_offline.py
+
+      - name: Failure messages
+        run: python tests/test_diagnostics.py
+
+      - name: Entrez query builder
+        run: python tests/test_entrez_query.py
+
+      - name: Cross-platform behaviour
+        run: python tests/test_portability.py
+
+      - name: Run database
+        run: python tests/test_db.py
+
+      - name: Interface languages
+        run: node tests/test_i18n.js
+
+      - name: Visualisation
+        # Needs a finished run to render, so produce one first without touching
+        # the network: the offline pipeline test writes a job under data/jobs/.
+        run: |
+          python - <<'PY'
+          import json, sys, pathlib
+          sys.path.insert(0, 'backend')
+          import alignment, primer3_runner, validation, config
+          from models import Primer3Settings
+          sys.path.insert(0, 'tests')
+          from test_core_offline import make_records
+
+          _, _, records = make_records()
+          aligned = alignment.run_mafft(records)
+          profile = alignment.conservation_profile([r['aligned'] for r in aligned])
+          reference = alignment.build_reference(aligned, profile, mode='consensus')
+          blocks = alignment.conserved_blocks(profile, reference, 1.0, 0.0, 40)
+          excluded = alignment.variable_regions(blocks, len(reference['sequence']))
+          settings = Primer3Settings(num_return=2)
+          p3 = primer3_runner.run_primer3(reference['sequence'], 'ci', settings, excluded)
+          assert p3['pairs'], p3['explain']
+
+          for pair in p3['pairs']:
+              pair['binding'] = {
+                  'forward': validation.oligo_binding(pair['forward'], reference, aligned),
+                  'reverse': validation.oligo_binding(pair['reverse'], reference, aligned),
+              }
+              pair['amplicons'] = validation.amplicon_per_sequence(pair, reference, aligned)
+              pair['geometry'] = validation.pair_geometry(pair)
+              pair['order'] = validation.order_sequences(pair)
+              pair['block_hits'] = {'forward': 1, 'reverse': 1}
+              pair['coverage_percent'] = 100.0
+
+          out = pathlib.Path('data/jobs/ci')
+          out.mkdir(parents=True, exist_ok=True)
+          (out / 'results.json').write_text(json.dumps({
+              'gene_label': 'ci',
+              'settings': {'primer3': settings.model_dump(), 'conservation': {}},
+              'records': [{'accession': r['label'], 'header': '', 'length': len(r['sequence']),
+                           'fetched_range': None} for r in records],
+              'alignment': {'labels': [r['label'] for r in aligned],
+                            'sequences': [r['aligned'] for r in aligned],
+                            'reversed': [False] * len(aligned),
+                            'n': len(aligned), 'length': len(aligned[0]['aligned'])},
+              'reference': reference,
+              'profile': {'identity': [c['identity'] for c in profile],
+                          'gap': [c['gap_fraction'] for c in profile],
+                          'entropy': [c['entropy'] for c in profile],
+                          'major': ''.join(c['major'] for c in profile),
+                          'code': ''.join(c['code'] for c in profile)},
+              'blocks': blocks, 'excluded_regions': excluded,
+              'conserved_bp': sum(b['length'] for b in blocks),
+              'conservation_n': len(aligned),
+              'record_coverage': alignment.record_coverage(aligned),
+              'low_coverage_records': [],
+              'pairs': p3['pairs'],
+              'primer3_explain': p3['explain'], 'primer3_warning': p3['warning'],
+              'specificity': {'available': False, 'reason': 'skipped in CI'},
+              'tool_versions': config.tool_versions(),
+              'timings': {'total_s': 0}, 'workdir': str(out),
+          }))
+          PY
+          node tests/test_viz_headless.js
+
+      - name: PowerShell scripts parse
+        shell: pwsh
+        run: |
+          foreach ($f in 'install.ps1', 'run.ps1') {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $f), [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) { throw "$f : $($errors[0].Message)" }
+            Write-Host "$f parses"
+          }
+
+      - name: Installer runs clean
+        # install.sh reports problems as warnings and still exits 0, so the exit
+        # code alone would make this step meaningless. Fail on its failure marker.
+        run: |
+          set -o pipefail
+          bash install.sh 2>&1 | tee /tmp/install.log
+          if grep -q '✗' /tmp/install.log; then
+            echo "installer reported a failure"; exit 1
+          fi
